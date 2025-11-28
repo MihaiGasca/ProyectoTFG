@@ -1,21 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
-void main() {
-  runApp(const MiApp());
-}
+// DAOs
+import 'usuario_dao.dart';
+import 'conversacion_dao.dart';
 
-class MiApp extends StatelessWidget {
-  const MiApp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return const MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: 'Usuarios Expandibles',
-      home: PaginaUsuarios(),
-    );
-  }
-}
+// Pantallas
+import 'pantalla_chat_individual.dart';
+import 'pantalla_conversaciones.dart';
+import 'pantalla_perfil.dart';
+import 'pantalla_citas.dart';
+import 'pantalla_login.dart';
 
 class PaginaUsuarios extends StatefulWidget {
   const PaginaUsuarios({super.key});
@@ -25,203 +20,237 @@ class PaginaUsuarios extends StatefulWidget {
 }
 
 class _PaginaUsuariosState extends State<PaginaUsuarios> {
-  final List<Map<String, String>> usuarios = const [
-    {'nombre': 'Juan', 'apellidos': 'Pérez López'},
-    {'nombre': 'María', 'apellidos': 'Gómez Sánchez'},
-    {'nombre': 'Carlos', 'apellidos': 'Ramírez Ortega'},
-    {'nombre': 'Lucía', 'apellidos': 'Fernández Ruiz'},
-    {'nombre': 'Ana', 'apellidos': 'Martínez Díaz'},
-  ];
+  final usuarioDAO = UsuarioDAO(Supabase.instance.client);
+  final conversacionDAO = ConversacionDAO(Supabase.instance.client);
 
-  int? _indiceExpandido; // guarda cuál usuario está abierto
+  List<Map<String, dynamic>> psicologos = [];
+  int? _indiceExpandido;
+  bool _cargando = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _cargarPsicologos();
+  }
+
+  Future<void> _cargarPsicologos() async {
+    setState(() => _cargando = true);
+
+    try {
+      final lista = await usuarioDAO.getPsicologos();
+      setState(() => psicologos = lista);
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text("Error cargando psicólogos: $e")));
+    } finally {
+      if (mounted) {
+        setState(() => _cargando = false);
+      }
+    }
+  }
+
+  /// ----------------------------------------------------------
+  /// 🔥 ABRIR CHAT (Crea conversación si no existe)
+  /// ----------------------------------------------------------
+  Future<void> _abrirChat(Map<String, dynamic> psicologo) async {
+    try {
+      final conv = await conversacionDAO.getOrCreateConversation(psicologo['id']);
+
+      if (!mounted) return;
+
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => PantallaChatIndividual(conversacion: conv),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text("Error abriendo chat: $e")));
+    }
+  }
+
+  void _pedirCita(Map<String, dynamic> psicologo) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => PantallaCitas(psicologoSeleccionado: psicologo),
+      ),
+    );
+  }
+
+  void _verPerfil(Map<String, dynamic> psicologo) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => PantallaPerfil(psicologo: psicologo),
+      ),
+    );
+  }
+
+  void _cerrarSesion() async {
+    await Supabase.instance.client.auth.signOut();
+
+    if (!mounted) return;
+
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (_) => const PantallaLogin()),
+      (route) => false,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFFFEDEB),
+
       appBar: AppBar(
-        title: const Text('Usuarios'),
-        centerTitle: true,
-        backgroundColor: Colors.grey[200],
-        foregroundColor: Colors.black87,
-        elevation: 1,
+        title: const Text("TherapyFind"),
+        backgroundColor: const Color(0xFFFF8A80),
+        foregroundColor: Colors.white,
+        elevation: 2,
       ),
+
       body: Column(
         children: [
-          // 🔹 Barra de opciones debajo del navbar
+          // ------------------------------------------------------
+          // 🔥 MENÚ SUPERIOR (CHAT – CITAS – PERFIL – SALIR)
+          // ------------------------------------------------------
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(
-              color: Colors.grey[100],
-              border: const Border(bottom: BorderSide(color: Colors.black12)),
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            decoration: const BoxDecoration(
+              color: Color(0xFFFFC4BD),
+              boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 3)],
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                _OpcionMenu(
-                  icono: Icons.chat_bubble_outline,
-                  texto: 'Chat',
-                  onTap: () => _mostrarMensaje(context, 'Chat'),
-                ),
-                _OpcionMenu(
-                  icono: Icons.filter_alt_outlined,
-                  texto: 'Filtros',
-                  onTap: () => _mostrarMensaje(context, 'Filtros'),
-                ),
-                _OpcionMenu(
-                  icono: Icons.person_outline,
-                  texto: 'Mi perfil',
-                  onTap: () => _mostrarMensaje(context, 'Mi perfil'),
-                ),
-                _OpcionMenu(
-                  icono: Icons.calendar_today_outlined,
-                  texto: 'Citas',
-                  onTap: () => _mostrarMensaje(context, 'Citas'),
-                ),
+                _menuBoton(Icons.chat_bubble_outline, "Chat", () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const PantallaConversaciones()),
+                  );
+                }),
+
+                _menuBoton(Icons.calendar_month, "Citas", () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const PantallaCitas()),
+                  );
+                }),
+
+                _menuBoton(Icons.person_outline, "Mi perfil", () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const PantallaPerfil()),
+                  );
+                }),
+
+                _menuBoton(Icons.logout, "Salir", _cerrarSesion),
               ],
             ),
           ),
 
-          // 🔹 Lista expandible de usuarios
+          // ------------------------------------------------------
+          // 🔥 LISTADO DE PSICÓLOGOS
+          // ------------------------------------------------------
           Expanded(
-            child: ListView.builder(
-              itemCount: usuarios.length,
-              itemBuilder: (context, index) {
-                final usuario = usuarios[index];
-                final bool estaExpandido = _indiceExpandido == index;
+            child: _cargando
+                ? const Center(child: CircularProgressIndicator())
+                : psicologos.isEmpty
+                    ? const Center(child: Text("No se encontraron psicólogos"))
+                    : ListView.builder(
+                        itemCount: psicologos.length,
+                        itemBuilder: (context, index) {
+                          final p = psicologos[index];
+                          final abierto = _indiceExpandido == index;
 
-                return Card(
-                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  elevation: 2,
-                  child: ExpansionTile(
-                    key: Key(index.toString()),
-                    initiallyExpanded: estaExpandido,
-                    onExpansionChanged: (expanded) {
-                      setState(() {
-                        _indiceExpandido = expanded ? index : null;
-                      });
-                    },
-                    leading: CircleAvatar(
-                      backgroundColor: Colors.blue[100],
-                      child: Text(usuario['nombre']![0],
-                          style: const TextStyle(color: Colors.black87)),
-                    ),
-                    title: Text(usuario['nombre'] ?? ''),
-                    subtitle: Text(usuario['apellidos'] ?? ''),
-                    children: [
-                      const Divider(),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 8.0),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                          children: [
-                            _BotonAccion(
-                              icono: Icons.message_outlined,
-                              texto: 'Mensaje',
-                              onTap: () => _mostrarMensaje(context,
-                                  'Enviar mensaje a ${usuario['nombre']}'),
+                          return Card(
+                            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
                             ),
-                            _BotonAccion(
-                              icono: Icons.calendar_today_outlined,
-                              texto: 'Pedir cita',
-                              onTap: () => _mostrarMensaje(context,
-                                  'Pedir cita con ${usuario['nombre']}'),
+                            elevation: 3,
+                            child: ExpansionTile(
+                              key: Key(index.toString()),
+                              initiallyExpanded: abierto,
+                              onExpansionChanged: (x) {
+                                setState(() => _indiceExpandido = x ? index : null);
+                              },
+
+                              leading: CircleAvatar(
+                                backgroundImage:
+                                    (p["foto_perfil"] != null && p["foto_perfil"].toString().isNotEmpty)
+                                        ? NetworkImage(p["foto_perfil"])
+                                        : null,
+                                child:
+                                    (p["foto_perfil"] == null || p["foto_perfil"].toString().isEmpty)
+                                        ? Text((p["nombre"] ?? "?")[0])
+                                        : null,
+                              ),
+
+                              title: Text("${p["nombre"]} ${p["apellidos"]}"),
+                              subtitle: Text(p["descripcion"] ?? ""),
+
+                              children: [
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(vertical: 10),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                    children: [
+                                      TextButton.icon(
+                                        onPressed: () => _abrirChat(p),
+                                        icon: const Icon(Icons.message),
+                                        label: const Text("Mensaje"),
+                                      ),
+                                      TextButton.icon(
+                                        onPressed: () => _pedirCita(p),
+                                        icon: const Icon(Icons.calendar_month),
+                                        label: const Text("Pedir cita"),
+                                      ),
+                                      TextButton.icon(
+                                        onPressed: () => _verPerfil(p),
+                                        icon: const Icon(Icons.person_search),
+                                        label: const Text("Ver perfil"),
+                                      ),
+                                    ],
+                                  ),
+                                )
+                              ],
                             ),
-                            _BotonAccion(
-                              icono: Icons.person_search_outlined,
-                              texto: 'Ver perfil',
-                              onTap: () => _mostrarMensaje(context,
-                                  'Ver perfil de ${usuario['nombre']}'),
-                            ),
-                          ],
-                        ),
+                          );
+                        },
                       ),
-                    ],
-                  ),
-                );
-              },
-            ),
           ),
         ],
       ),
-      bottomNavigationBar: Container(
-        height: 50,
-        color: Colors.grey[200],
-        alignment: Alignment.center,
-        child: const Text(
-          '© 2025 Mi App Flutter',
-          style: TextStyle(fontSize: 14, color: Colors.black54),
-        ),
-      ),
     );
   }
 
-  void _mostrarMensaje(BuildContext context, String texto) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(texto)),
-    );
-  }
-}
-
-// 🔸 Pequeños widgets reutilizables
-
-class _OpcionMenu extends StatelessWidget {
-  final IconData icono;
-  final String texto;
-  final VoidCallback onTap;
-
-  const _OpcionMenu({
-    required this.icono,
-    required this.texto,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
+  // -------------------------------------------------
+  // 🔥 BOTÓN ESTILADO DEL MENÚ SUPERIOR
+  // -------------------------------------------------
+  Widget _menuBoton(IconData icon, String texto, VoidCallback onTap) {
     return GestureDetector(
       onTap: onTap,
       child: Column(
-        mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icono, size: 24, color: Colors.black87),
-          const SizedBox(height: 4),
+          Icon(icon, size: 26, color: const Color(0xFFB1443C)),
+          const SizedBox(height: 3),
           Text(
             texto,
-            style: const TextStyle(fontSize: 13, color: Colors.black87),
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFFB1443C),
+            ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _BotonAccion extends StatelessWidget {
-  final IconData icono;
-  final String texto;
-  final VoidCallback onTap;
-
-  const _BotonAccion({
-    required this.icono,
-    required this.texto,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return TextButton.icon(
-      onPressed: onTap,
-      icon: Icon(icono, color: Colors.black87),
-      label: Text(
-        texto,
-        style: const TextStyle(color: Colors.black87),
-      ),
-      style: TextButton.styleFrom(
-        foregroundColor: Colors.black87,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
       ),
     );
   }
