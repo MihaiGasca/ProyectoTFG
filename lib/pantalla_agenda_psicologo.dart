@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-
-import 'citas_dao.dart';
-import 'pantalla_perfil.dart';   // ← ASEGÚRATE DE QUE ESTE PATH ES CORRECTO
+import 'disponibilidad_dao.dart';
 
 class PantallaAgendaPsicologo extends StatefulWidget {
   const PantallaAgendaPsicologo({super.key});
@@ -14,65 +12,162 @@ class PantallaAgendaPsicologo extends StatefulWidget {
 }
 
 class _PantallaAgendaPsicologoState extends State<PantallaAgendaPsicologo> {
-  late final CitasDAO citasDAO;
-  DateTime _focused = DateTime.now();
-  DateTime _selected = DateTime.now();
+  late DisponibilidadDAO dao;
 
-  List<Map<String, dynamic>> todasCitas = [];
+  List<Map<String, dynamic>> horarios = [];
+  List<Map<String, dynamic>> citas = [];
+
+  DateTime _selected = DateTime.now();
+  DateTime _focused = DateTime.now();
+  CalendarFormat _format = CalendarFormat.month;
+  bool loading = true;
 
   @override
   void initState() {
     super.initState();
-    citasDAO = CitasDAO(Supabase.instance.client);
-    _cargar();
+    dao = DisponibilidadDAO(Supabase.instance.client);
+    cargar();
   }
 
-  Future<void> _cargar() async {
-    final datos = await citasDAO.getCitasPsicologo();
-    setState(() => todasCitas = datos);
+  Future<void> cargar() async {
+    final h = await dao.getDisponibilidad();
+    final c = await dao.getCitas();
+
+    setState(() {
+      horarios = h;
+      citas = c;
+      loading = false;
+    });
   }
 
-  List<Map<String, dynamic>> _citasDelDia(DateTime d) {
-    return todasCitas.where((c) {
-      final f = DateTime.parse(c['fecha']).toLocal();
+  List<Map<String, dynamic>> citasDelDia(DateTime d) {
+    return citas.where((c) {
+      final f = DateTime.parse(c['fecha']);
       return f.year == d.year && f.month == d.month && f.day == d.day;
     }).toList();
   }
 
-  Future<void> _aceptar(String id) async {
-    await citasDAO.aceptarCita(id);
-    await _cargar();
+  Map<String, List<Map<String, dynamic>>> horariosPorDia() {
+    final map = <String, List<Map<String, dynamic>>>{};
+
+    for (var h in horarios) {
+      final name = _dia(h['dia_semana']);
+      map.putIfAbsent(name, () => []);
+      map[name]!.add(h);
+    }
+
+    return map;
   }
 
-  Future<void> _cancelar(String id) async {
-    final motivo = await _pedirMotivo();
-    if (motivo == null || motivo.isEmpty) return;
-
-    await citasDAO.cancelarCita(id, motivo);
-    await _cargar();
+  String _dia(int d) {
+    const dias = [
+      "",
+      "Lunes",
+      "Martes",
+      "Miércoles",
+      "Jueves",
+      "Viernes",
+      "Sábado",
+      "Domingo"
+    ];
+    return dias[d];
   }
 
-  Future<String?> _pedirMotivo() async {
-    String motivo = "";
-    return showDialog<String>(
+  Future<void> cancelarCita(String id) async {
+    await Supabase.instance.client
+        .from('citas')
+        .update({'estado': 'cancelada'})
+        .eq('id', id);
+    cargar();
+  }
+
+  Future<void> _addHorario() async {
+    int dia = DateTime.monday;
+    final inicio = TextEditingController();
+    final fin = TextEditingController();
+
+    await showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text("Cancelar cita"),
-        content: TextField(
-          decoration: const InputDecoration(
-            hintText: "Motivo de cancelación",
-          ),
-          onChanged: (v) => motivo = v,
+        title: const Text("Nuevo horario"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            DropdownButton<int>(
+              value: dia,
+              items: List.generate(
+                7,
+                (i) => DropdownMenuItem(
+                  value: i + 1,
+                  child: Text(_dia(i + 1)),
+                ),
+              ),
+              onChanged: (v) => setState(() => dia = v!),
+            ),
+            TextField(
+              controller: inicio,
+              decoration: const InputDecoration(hintText: "Inicio ej: 09:00"),
+            ),
+            TextField(
+              controller: fin,
+              decoration: const InputDecoration(hintText: "Fin ej: 12:00"),
+            ),
+          ],
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Volver"),
-          ),
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Cancelar")),
           ElevatedButton(
-            onPressed: () => Navigator.pop(context, motivo),
-            child: const Text("Cancelar"),
-          ),
+            onPressed: () async {
+              try {
+                await dao.addHorario(dia, inicio.text, fin.text);
+                Navigator.pop(context);
+                cargar();
+              } catch (e) {
+                ScaffoldMessenger.of(context)
+                    .showSnackBar(SnackBar(content: Text(e.toString())));
+              }
+            },
+            child: const Text("Guardar"),
+          )
+        ],
+      ),
+    );
+  }
+
+  Future<void> _editHorario(Map h) async {
+    final inicio = TextEditingController(text: h['hora_inicio']);
+    final fin = TextEditingController(text: h['hora_fin']);
+
+    await showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text("Editar horario"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(controller: inicio),
+            TextField(controller: fin),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Cancelar")),
+          ElevatedButton(
+            onPressed: () async {
+              try {
+                await dao.updateHorario(h['id'], inicio.text, fin.text);
+                Navigator.pop(context);
+                cargar();
+              } catch (e) {
+                ScaffoldMessenger.of(context)
+                    .showSnackBar(SnackBar(content: Text(e.toString())));
+              }
+            },
+            child: const Text("Guardar"),
+          )
         ],
       ),
     );
@@ -80,92 +175,108 @@ class _PantallaAgendaPsicologoState extends State<PantallaAgendaPsicologo> {
 
   @override
   Widget build(BuildContext context) {
-    final citasHoy = _citasDelDia(_selected);
+    if (loading) {
+      return const Scaffold(
+          body: Center(child: CircularProgressIndicator()));
+    }
+
+    final citasHoy = citasDelDia(_selected);
+    final horariosDia = horariosPorDia();
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Agenda del Psicólogo"),
-        centerTitle: true,
         backgroundColor: const Color(0xFFFF8A80),
+        title: const Text("Mi agenda"),
       ),
+
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: const Color(0xFFFF8A80),
+        child: const Icon(Icons.add),
+        onPressed: _addHorario,
+      ),
+
       body: Column(
         children: [
+          const SizedBox(height: 8),
+
+          /// ---------------- CALENDARIO -----------------
           TableCalendar(
             firstDay: DateTime.utc(2020),
             lastDay: DateTime.utc(2030),
             focusedDay: _focused,
-            selectedDayPredicate: (d) =>
-                d.year == _selected.year &&
-                d.month == _selected.month &&
-                d.day == _selected.day,
-            onDaySelected: (sel, foc) {
-              setState(() {
-                _selected = sel;
-                _focused = foc;
-              });
-            },
-            eventLoader: (day) => _citasDelDia(day),
-            headerStyle: const HeaderStyle(
-              titleCentered: true,
-              formatButtonVisible: false,
+            calendarFormat: _format,
+            selectedDayPredicate: (d) => isSameDay(d, _selected),
+            startingDayOfWeek: StartingDayOfWeek.monday,
+            onFormatChanged: (f) => setState(() => _format = f),
+            onDaySelected: (d, f) => setState(() {
+              _selected = d;
+              _focused = f;
+            }),
+            eventLoader: citasDelDia,
+            calendarStyle: const CalendarStyle(
+              todayDecoration:
+                  BoxDecoration(color: Colors.orange, shape: BoxShape.circle),
+              selectedDecoration:
+                  BoxDecoration(color: Colors.blue, shape: BoxShape.circle),
             ),
           ),
 
-          const Divider(),
+          const SizedBox(height: 8),
+          const Text("Citas del día",
+              style: TextStyle(fontWeight: FontWeight.bold)),
 
-          Expanded(
+          SizedBox(
+            height: 140,
             child: citasHoy.isEmpty
-                ? const Center(child: Text("No hay citas este día"))
+                ? const Center(child: Text("No hay citas"))
                 : ListView.builder(
                     itemCount: citasHoy.length,
                     itemBuilder: (_, i) {
                       final c = citasHoy[i];
-                      final usuario = c['usuario'];
+                      final f = DateTime.parse(c['fecha']);
 
-                      return Card(
-                        margin: const EdgeInsets.all(12),
-                        child: ListTile(
-                          leading: CircleAvatar(
-                            backgroundImage:
-                                (usuario['foto_perfil'] != null &&
-                                        usuario['foto_perfil'].toString().isNotEmpty)
-                                    ? NetworkImage(usuario['foto_perfil'])
-                                    : null,
-                            child: (usuario['foto_perfil'] == null ||
-                                    usuario['foto_perfil'].toString().isEmpty)
-                                ? Text(usuario['nombre'][0])
-                                : null,
-                          ),
-                          title: Text("${usuario['nombre']} ${usuario['apellidos']}"),
-                          subtitle: Text(
-                            "Hora: ${DateTime.parse(c['fecha']).toLocal().hour}:${DateTime.parse(c['fecha']).minute.toString().padLeft(2, '0')}\nEstado: ${c['estado']}",
-                          ),
-                          trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              if (c['estado'] == 'pendiente')
-                                IconButton(
-                                  icon: const Icon(Icons.check, color: Colors.green),
-                                  onPressed: () => _aceptar(c['id']),
-                                ),
-                              IconButton(
-                                icon: const Icon(Icons.close, color: Colors.red),
-                                onPressed: () => _cancelar(c['id']),
-                              ),
-                            ],
-                          ),
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => PantallaPerfil(psicologo: usuario),
-                              ),
-                            );
+                      return ListTile(
+                        title: Text(
+                            "${c['usuario']['nombre']} ${c['usuario']['apellidos']}"),
+                        subtitle: Text(
+                            "${f.day}/${f.month} ${f.hour}:${f.minute.toString().padLeft(2, '0')}"),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.close, color: Colors.red),
+                          onPressed: () => cancelarCita(c['id']),
+                        ),
+                      );
+                    }),
+          ),
+
+          const Divider(),
+          const Text("Horarios disponibles",
+              style: TextStyle(fontWeight: FontWeight.bold)),
+
+          /// ---------------- HORARIOS -----------------
+          Expanded(
+            child: ListView(
+              children: horariosDia.entries.map((e) {
+                return Card(
+                  child: ExpansionTile(
+                    title: Text(e.key),
+                    children: e.value.map((h) {
+                      return ListTile(
+                        title: Text(
+                            "${h['hora_inicio']} - ${h['hora_fin'] ?? ''}"),
+                        onTap: () => _editHorario(h),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.delete, color: Colors.red),
+                          onPressed: () async {
+                            await dao.deleteHorario(h['id']);
+                            cargar();
                           },
                         ),
                       );
-                    },
+                    }).toList(),
                   ),
+                );
+              }).toList(),
+            ),
           ),
         ],
       ),

@@ -14,39 +14,37 @@ class AuthDAO {
   }
 
   /// Registrar usuario: crea en Auth y en tabla usuarios
-  Future<AuthResponse> register({
-    required String email,
-    required String password,
-    required String nombre,
-    required String apellidos,
-    String tipo = 'usuario',
-  }) async {
-    final res = await supabase.auth.signUp(
-      email: email,
-      password: password,
-    );
+ Future<AuthResponse> register({
+  required String email,
+  required String password,
+  required String nombre,
+  required String apellidos,
+  required String tipo,
+}) async {
 
-    final user = res.user;
-    if (user == null) {
-      // Puede que el registro necesite confirmación; igualmente devolvemos res
-      return res;
-    }
+  final res = await supabase.auth.signUp(
+    email: email,
+    password: password,
+  );
 
-    // Insertar registro en tabla usuarios
-    await supabase.from('usuarios').insert({
-      'id': user.id,
-      'tipo': tipo,
-      'nombre': nombre,
-      'apellidos': apellidos,
-      'correo': email,
-      'telefono': '',
-      'foto_perfil': '',
-      'descripcion': '',
-      'tags': [],
-    });
+  final user = res.user;
+  if (user == null) return res;
 
-    return res;
-  }
+  await supabase.from('usuarios').insert({
+    'id': user.id,
+    'tipo': tipo,
+    'nombre': nombre,
+    'apellidos': apellidos,
+    'correo': email,
+    'telefono': '',
+    'foto_perfil': '',
+    'descripcion': '',
+    'tags': [],
+  });
+
+  return res;
+}
+
 
   /// Cerrar sesión
   Future<void> logout() async {

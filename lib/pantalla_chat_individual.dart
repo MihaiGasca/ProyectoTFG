@@ -1,12 +1,37 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'dart:async';
 import 'package:intl/intl.dart';
 
-class PantallaChatIndividual extends StatefulWidget {
-  final Map<String, dynamic>? conversacion;
+class ChatMessage {
+  final String id;
+  final String content;
+  final String sender;
+  final String createdAt;
+  final bool isMine;
 
-  const PantallaChatIndividual({super.key, this.conversacion});
+  ChatMessage({
+    required this.id,
+    required this.content,
+    required this.sender,
+    required this.createdAt,
+    required this.isMine,
+  });
+
+  factory ChatMessage.fromMap(Map map, String myId) {
+    return ChatMessage(
+      id: map['id'],
+      content: map['contenido'],
+      sender: map['remitente_id'],
+      createdAt: map['created_at'],
+      isMine: map['remitente_id'] == myId,
+    );
+  }
+}
+
+class PantallaChatIndividual extends StatefulWidget {
+  final Map<String, dynamic> conversacion;
+  const PantallaChatIndividual({super.key, required this.conversacion});
 
   @override
   State<PantallaChatIndividual> createState() =>
@@ -14,255 +39,243 @@ class PantallaChatIndividual extends StatefulWidget {
 }
 
 class _PantallaChatIndividualState extends State<PantallaChatIndividual> {
-  final supabase = Supabase.instance.client;
+  final supa = Supabase.instance.client;
+
+  late final Stream<List<ChatMessage>> _stream;
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scroll = ScrollController();
 
-  List<Map<String, dynamic>> mensajes = [];
-  bool _loading = true;
-
-  RealtimeChannel? canal;
+  late final String convId;
+  late final String myId;
+  late Map otherUser;
 
   @override
   void initState() {
     super.initState();
-    _cargarMensajes();
-    _escucharMensajesRealtime();
+
+    convId = widget.conversacion['id'];
+    myId = supa.auth.currentUser!.id;
+
+    _prepareHeader();
+    _prepareStream();
   }
 
-  Future<void> _cargarMensajes() async {
-    setState(() => _loading = true);
-
-    try {
-      final convId = widget.conversacion?['id'];
-      if (convId == null) return;
-
-      final data = await supabase
-          .from('mensajes')
-          .select()
-          .eq('conversacion_id', convId)
-          .order('created_at', ascending: true);
-
-      mensajes = List<Map<String, dynamic>>.from(data);
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Error: $e')));
-      }
-    } finally {
-      setState(() => _loading = false);
-      _scrollToEnd();
-    }
+  void _prepareStream() {
+    _stream = supa
+        .from('mensajes')
+        .stream(primaryKey: ['id'])
+        .eq('conversacion_id', convId)
+        .order('created_at', ascending: false)
+        .map((rows) =>
+            rows.map((r) => ChatMessage.fromMap(r, myId)).toList());
   }
 
-  void _escucharMensajesRealtime() {
-    final convId = widget.conversacion?['id'];
-    if (convId == null) return;
-
-    canal = supabase
-        .channel('chat_$convId')
-        .onPostgresChanges(
-          event: PostgresChangeEvent.insert,
-          schema: 'public',
-          table: 'mensajes',
-          filter: PostgresChangeFilter(
-            type: PostgresChangeFilterType.eq,
-            column: 'conversacion_id',
-            value: convId,
-          ),
-          callback: (payload) {
-            final nuevo = payload.newRecord;
-            setState(() => mensajes.add(nuevo));
-            _scrollToEnd();
-          },
-        )
-        .subscribe();
+  void _prepareHeader() {
+    final u1 = widget.conversacion['usuario1'];
+    final u2 = widget.conversacion['usuario2'];
+    otherUser = u1['id'] == myId ? u2 : u1;
   }
 
-  Future<void> _enviar() async {
-    final texto = _controller.text.trim();
-    if (texto.isEmpty) return;
-
-    final user = supabase.auth.currentUser;
-    final convId = widget.conversacion?['id'];
-    if (user == null || convId == null) return;
-
+  Future<void> _send() async {
+    final text = _controller.text.trim();
+    if (text.isEmpty) return;
     _controller.clear();
 
-    try {
-      await supabase.from('mensajes').insert({
-        'conversacion_id': convId,
-        'remitente_id': user.id,
-        'contenido': texto,
-      });
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error al enviar: $e')),
-      );
-    }
+    await supa.from('mensajes').insert({
+      'conversacion_id': convId,
+      'remitente_id': myId,
+      'contenido': text,
+    });
+
+    await supa.from('conversaciones').update({
+      'last_message': text,
+      'updated_at': DateTime.now().toIso8601String()
+    }).eq('id', convId);
+
+    _scrollToBottom();
   }
 
-  void _scrollToEnd() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scroll.hasClients) {
-        _scroll.jumpTo(_scroll.position.maxScrollExtent);
-      }
+  void _scrollToBottom() {
+    Future.delayed(const Duration(milliseconds: 100), () {
+      if (!_scroll.hasClients) return;
+      _scroll.jumpTo(_scroll.position.minScrollExtent);
     });
   }
 
-  @override
-  void dispose() {
-    _controller.dispose();
-    _scroll.dispose();
-    canal?.unsubscribe();
-    super.dispose();
+  String _hora(String iso) {
+    try {
+      final dt = DateTime.parse(iso).toLocal();
+      return DateFormat('HH:mm').format(dt);
+    } catch (_) {
+      return '';
+    }
   }
 
-  String _formatHora(String ts) {
-    final dt = DateTime.parse(ts).toLocal();
-    return DateFormat('HH:mm').format(dt);
+  String _dia(String iso) {
+    final dt = DateTime.parse(iso).toLocal();
+    return DateFormat('d MMM yyyy').format(dt);
   }
 
-  String _formatFecha(String ts) {
-    final d = DateTime.parse(ts).toLocal();
-    final hoy = DateTime.now();
-    final ayer = hoy.subtract(const Duration(days: 1));
-
-    if (d.year == hoy.year &&
-        d.month == hoy.month &&
-        d.day == hoy.day) return "Hoy";
-    if (d.year == ayer.year &&
-        d.month == ayer.month &&
-        d.day == ayer.day) return "Ayer";
-
-    return DateFormat('dd/MM/yyyy').format(d);
+  bool _esNuevoDia(String? prevIso, String currentIso) {
+    if (prevIso == null) return true;
+    final prev = DateTime.parse(prevIso).toLocal();
+    final curr = DateTime.parse(currentIso).toLocal();
+    return prev.year != curr.year ||
+        prev.month != curr.month ||
+        prev.day != curr.day;
   }
 
   @override
   Widget build(BuildContext context) {
-    final conv = widget.conversacion;
-    final yoId = supabase.auth.currentUser?.id;
-
-    final u1 = conv?['usuario1'];
-    final u2 = conv?['usuario2'];
-
-    final other = (u1 != null && u1['id'] != yoId) ? u1 : u2;
-
-    final foto = (other?['foto_perfil'] ?? "").toString();
-    final nombre = other?['nombre'] ?? "Usuario";
-
     return Scaffold(
       appBar: AppBar(
         backgroundColor: const Color(0xFFFF8A80),
         title: Row(
           children: [
             CircleAvatar(
-              backgroundImage: foto.isNotEmpty ? NetworkImage(foto) : null,
-              child: foto.isEmpty
-                  ? Text(nombre.substring(0, 1))
+              backgroundImage: (otherUser['foto_perfil'] ?? '').isNotEmpty
+                  ? NetworkImage(otherUser['foto_perfil'])
+                  : null,
+              child: (otherUser['foto_perfil'] ?? '').isEmpty
+                  ? Text(otherUser['nombre'][0])
                   : null,
             ),
             const SizedBox(width: 10),
-            Text(nombre),
+            Text("${otherUser['nombre']} ${otherUser['apellidos']}"),
           ],
         ),
       ),
-      body: Column(
-        children: [
-          Expanded(
-            child: _loading
-                ? const Center(child: CircularProgressIndicator())
-                : ListView.builder(
-                    controller: _scroll,
-                    itemCount: mensajes.length,
-                    itemBuilder: (context, index) {
-                      final m = mensajes[index];
-                      final esYo = m['remitente_id'] == yoId;
+      body: StreamBuilder<List<ChatMessage>>(
+        stream: _stream,
+        builder: (context, snapshot) {
+          if (!snapshot.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
 
-                      bool mostrarFecha = false;
-                      if (index == 0) mostrarFecha = true;
-                      else {
-                        final fActual = _formatFecha(m['created_at']);
-                        final fAnterior = _formatFecha(mensajes[index - 1]['created_at']);
-                        mostrarFecha = fActual != fAnterior;
-                      }
+          final mensajes = snapshot.data!;
 
-                      return Column(
-                        children: [
-                          if (mostrarFecha)
-                            Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 8),
-                              child: Text(_formatFecha(m['created_at']),
-                                  style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.grey)),
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _scrollToBottom();
+          });
+
+          return Column(
+            children: [
+              Expanded(
+                child: ListView.builder(
+                  controller: _scroll,
+                  reverse: true,
+                  padding: const EdgeInsets.symmetric(
+                      vertical: 20, horizontal: 15),
+                  itemCount: mensajes.length,
+                  itemBuilder: (context, i) {
+                    final m = mensajes[i];
+
+                    bool showDate = i == mensajes.length - 1 ||
+                        _esNuevoDia(
+                          mensajes[i + 1].createdAt,
+                          m.createdAt,
+                        );
+
+                    return Column(
+                      children: [
+                        if (showDate)
+                          Padding(
+                            padding:
+                                const EdgeInsets.symmetric(vertical: 10),
+                            child: Text(
+                              _dia(m.createdAt),
+                              style: const TextStyle(
+                                  fontSize: 13,
+                                  color: Colors.black54,
+                                  fontWeight: FontWeight.w600),
                             ),
-                          Row(
-                            mainAxisAlignment:
-                                esYo ? MainAxisAlignment.end : MainAxisAlignment.start,
-                            children: [
-                              Container(
-                                margin: const EdgeInsets.symmetric(
-                                    horizontal: 12, vertical: 4),
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 14, vertical: 10),
-                                constraints: BoxConstraints(
-                                  maxWidth:
-                                      MediaQuery.of(context).size.width * 0.75,
+                          ),
+
+                        Align(
+                          alignment: m.isMine
+                              ? Alignment.centerRight
+                              : Alignment.centerLeft,
+                          child: Container(
+                            margin: const EdgeInsets.symmetric(
+                                vertical: 6, horizontal: 5),
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: m.isMine
+                                  ? const Color(0xFFB3D7FF)
+                                  : const Color(0xFFE8E8E8),
+                              borderRadius: BorderRadius.circular(15),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: m.isMine
+                                  ? CrossAxisAlignment.end
+                                  : CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  m.content,
+                                  style: const TextStyle(fontSize: 15),
                                 ),
-                                decoration: BoxDecoration(
-                                  color: esYo
-                                      ? const Color(0xFFFFC1BD)
-                                      : Colors.grey.shade300,
-                                  borderRadius: BorderRadius.circular(14),
+                                const SizedBox(height: 4),
+                                Text(
+                                  _hora(m.createdAt),
+                                  style: TextStyle(
+                                      fontSize: 11,
+                                      color: Colors.grey[600]),
                                 ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.end,
-                                  children: [
-                                    Text(m['contenido'] ?? '',
-                                        style: const TextStyle(fontSize: 16)),
-                                    const SizedBox(height: 6),
-                                    Text(_formatHora(m['created_at']),
-                                        style: TextStyle(
-                                            fontSize: 11,
-                                            color: Colors.grey.shade700)),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          )
-                        ],
-                      );
-                    },
-                  ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              boxShadow: [
-                BoxShadow(color: Colors.black12, blurRadius: 3),
-              ],
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _controller,
-                    decoration: const InputDecoration(
-                        hintText: 'Escribe un mensaje...',
-                        border: InputBorder.none),
-                    onSubmitted: (_) => _enviar(),
-                  ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
                 ),
-                IconButton(
-                  icon: const Icon(Icons.send, color: Color(0xFFFF8A80)),
-                  onPressed: _enviar,
+              ),
+
+              _BarraMensaje(controller: _controller, send: _send),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _BarraMensaje extends StatelessWidget {
+  final TextEditingController controller;
+  final VoidCallback send;
+
+  const _BarraMensaje({
+    Key? key,
+    required this.controller,
+    required this.send,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.grey[200],
+      child: SafeArea(
+        child: Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: controller,
+                minLines: 1,
+                maxLines: 5,
+                decoration: const InputDecoration(
+                  hintText: 'Escribe un mensaje...',
+                  border: InputBorder.none,
+                  contentPadding: EdgeInsets.all(10),
                 ),
-              ],
+                onSubmitted: (_) => send(),
+              ),
             ),
-          ),
-        ],
+            IconButton(
+              icon: const Icon(Icons.send),
+              onPressed: send,
+            ),
+          ],
+        ),
       ),
     );
   }

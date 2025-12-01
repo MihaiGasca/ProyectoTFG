@@ -1,124 +1,116 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'conversacion_dao.dart';
 import 'pantalla_chat_individual.dart';
 
 class PantallaConversaciones extends StatefulWidget {
-  final Map<String, dynamic>? peer;
-
-  const PantallaConversaciones({super.key, this.peer});
+  const PantallaConversaciones({super.key});
 
   @override
-  State<PantallaConversaciones> createState() =>
-      _PantallaConversacionesState();
+  State<PantallaConversaciones> createState() => _PantallaConversacionesState();
 }
 
 class _PantallaConversacionesState extends State<PantallaConversaciones> {
-  final supabase = Supabase.instance.client;
+  final conversacionDAO = ConversacionDAO(Supabase.instance.client);
+
+  String tipoUsuario = '';
+  bool _loadingUser = true;
+  bool _loadingChats = true;
+
   List<Map<String, dynamic>> conversaciones = [];
-  bool _cargando = true;
 
   @override
   void initState() {
     super.initState();
-    _cargarConversaciones();
+    _loadUser();
   }
 
-  Future<void> _cargarConversaciones() async {
-    setState(() => _cargando = true);
+  Future<void> _loadUser() async {
+    final userId = Supabase.instance.client.auth.currentUser!.id;
 
-    try {
-      final me = supabase.auth.currentUser;
-      if (me == null) return;
+    final resp = await Supabase.instance.client
+        .from('usuarios')
+        .select('tipo')
+        .eq('id', userId)
+        .maybeSingle();
 
-      final data = await supabase
-          .from('conversaciones')
-          .select('''
-            id,
-            last_message,
-            updated_at,
-            usuario1_id,
-            usuario2_id,
-            usuario1:usuario1_id (
-              id,
-              nombre,
-              apellidos,
-              foto_perfil
-            ),
-            usuario2:usuario2_id (
-              id,
-              nombre,
-              apellidos,
-              foto_perfil
-            )
-          ''')
-          .or('usuario1_id.eq.${me.id},usuario2_id.eq.${me.id}')
-          .order('updated_at', ascending: false);
+    tipoUsuario = resp?['tipo'] ?? '';
+    setState(() => _loadingUser = false);
 
-      conversaciones = List<Map<String, dynamic>>.from(data);
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Error: $e')));
-    } finally {
-      if (mounted) {
-        setState(() => _cargando = false);
-      }
+    _loadChats();
+  }
+
+  Future<void> _loadChats() async {
+    final lista = await conversacionDAO.getConversacionesUsuario();
+    final me = Supabase.instance.client.auth.currentUser!.id;
+
+    if (tipoUsuario == 'psicologo') {
+      conversaciones = lista.where((c) {
+        final other = (c['usuario1_id'] == me)
+            ? c['usuario2']
+            : c['usuario1'];
+
+        return other['tipo'] == 'usuario';
+      }).toList();
+    } else {
+      conversaciones = lista;
     }
-  }
 
-  void _abrirChat(Map<String, dynamic> conv) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => PantallaChatIndividual(conversacion: conv),
-      ),
-    );
+    setState(() => _loadingChats = false);
   }
 
   @override
   Widget build(BuildContext context) {
-    final meId = supabase.auth.currentUser?.id;
+    if (_loadingUser || _loadingChats) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Conversaciones'),
-        centerTitle: true,
         backgroundColor: const Color(0xFFFF8A80),
       ),
-      body: _cargando
-          ? const Center(child: CircularProgressIndicator())
-          : conversaciones.isEmpty
-              ? const Center(child: Text('No hay conversaciones todavía'))
-              : ListView.builder(
-                  itemCount: conversaciones.length,
-                  itemBuilder: (context, index) {
-                    final conv = conversaciones[index];
+      body: conversaciones.isEmpty
+          ? const Center(child: Text("No hay conversaciones"))
+          : ListView.builder(
+              itemCount: conversaciones.length,
+              itemBuilder: (_, i) {
+                final c = conversaciones[i];
+                final me = Supabase.instance.client.auth.currentUser!.id;
 
-                    final u1 = conv['usuario1'];
-                    final u2 = conv['usuario2'];
-                    final other =
-                        (u1 != null && u1['id'] != meId) ? u1 : u2;
+                final otherRaw = c['usuario1_id'] == me
+                    ? c['usuario2']
+                    : c['usuario1'];
 
-                    final foto = (other?['foto_perfil'] ?? '').toString();
-                    final nombre = other?['nombre'] ?? 'Usuario';
+                if (otherRaw == null) return const SizedBox.shrink();
 
-                    return ListTile(
-                      leading: CircleAvatar(
-                        backgroundImage:
-                            foto.isNotEmpty ? NetworkImage(foto) : null,
-                        child: foto.isEmpty
-                            ? Text(nombre.substring(0, 1))
-                            : null,
+                final other = Map<String, dynamic>.from(otherRaw);
+
+                return ListTile(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            PantallaChatIndividual(conversacion: c),
                       ),
-                      title: Text(
-                        '${other?['nombre'] ?? 'Usuario'} '
-                        '${other?['apellidos'] ?? ''}',
-                      ),
-                      subtitle: Text(conv['last_message'] ?? ''),
-                      onTap: () => _abrirChat(conv),
                     );
                   },
-                ),
+                  title: Text("${other['nombre']} ${other['apellidos']}"),
+                  subtitle: Text(c['last_message'] ?? ''),
+                  leading: CircleAvatar(
+                    backgroundImage: (other['foto_perfil'] ?? "").isNotEmpty
+                        ? NetworkImage(other['foto_perfil'])
+                        : null,
+                    child: (other['foto_perfil'] ?? "").isEmpty
+                        ? Text(other['nombre'][0])
+                        : null,
+                  ),
+                );
+              },
+            ),
     );
   }
 }

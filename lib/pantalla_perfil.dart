@@ -6,7 +6,7 @@ import 'dart:io';
 import 'usuario_dao.dart';
 
 class PantallaPerfil extends StatefulWidget {
-  final Map<String, dynamic>? psicologo; // Si es nulo, es el perfil propio
+  final Map<String, dynamic>? psicologo; // Si no viene, es tu perfil
 
   const PantallaPerfil({super.key, this.psicologo});
 
@@ -18,12 +18,17 @@ class _PantallaPerfilState extends State<PantallaPerfil> {
   final usuarioDAO = UsuarioDAO(Supabase.instance.client);
   final picker = ImagePicker();
 
+  final _form = GlobalKey<FormState>();
+
   bool cargando = true;
   bool esPerfilPropio = true;
 
   File? fotoLocal;
+
   late String nombre;
   late String apellidos;
+  late String correo;
+  late String telefono;
   late String descripcion;
   late String foto;
 
@@ -36,6 +41,8 @@ class _PantallaPerfilState extends State<PantallaPerfil> {
       final u = widget.psicologo!;
       nombre = u['nombre'];
       apellidos = u['apellidos'];
+      correo = u['correo'] ?? '';
+      telefono = u['telefono'] ?? '';
       descripcion = u['descripcion'] ?? '';
       foto = u['foto_perfil'] ?? '';
       cargando = false;
@@ -49,15 +56,14 @@ class _PantallaPerfilState extends State<PantallaPerfil> {
 
     nombre = datos?['nombre'] ?? '';
     apellidos = datos?['apellidos'] ?? '';
+    correo = datos?['correo'] ?? '';
+    telefono = datos?['telefono'] ?? '';
     descripcion = datos?['descripcion'] ?? '';
     foto = datos?['foto_perfil'] ?? '';
 
     setState(() => cargando = false);
   }
 
-  /// ------------------------------------------------------
-  /// Selecciona foto desde galería
-  /// ------------------------------------------------------
   Future<void> _seleccionarImagen() async {
     final picked = await picker.pickImage(
       source: ImageSource.gallery,
@@ -68,9 +74,6 @@ class _PantallaPerfilState extends State<PantallaPerfil> {
     setState(() => fotoLocal = File(picked.path));
   }
 
-  /// ------------------------------------------------------
-  /// Sube a Supabase Storage
-  /// ------------------------------------------------------
   Future<String?> _subirImagen() async {
     if (fotoLocal == null) return foto;
 
@@ -85,14 +88,13 @@ class _PantallaPerfilState extends State<PantallaPerfil> {
       fileOptions: const FileOptions(upsert: true),
     );
 
-    final url = supa.storage.from('perfiles').getPublicUrl(path);
-    return url;
+    return supa.storage.from('perfiles').getPublicUrl(path);
   }
 
-  /// ------------------------------------------------------
-  /// Guardar cambios
-  /// ------------------------------------------------------
   Future<void> _guardar() async {
+    if (!_form.currentState!.validate()) return;
+    _form.currentState!.save();
+
     setState(() => cargando = true);
 
     try {
@@ -102,8 +104,8 @@ class _PantallaPerfilState extends State<PantallaPerfil> {
       await usuarioDAO.actualizarPerfil(
         nombre: nombre,
         apellidos: apellidos,
-        correo: '',
-        telefono: '',
+        correo: correo,
+        telefono: telefono,
         descripcion: descripcion,
         foto: foto,
       );
@@ -129,47 +131,95 @@ class _PantallaPerfilState extends State<PantallaPerfil> {
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
               padding: const EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  GestureDetector(
-                    onTap: esPerfilPropio ? _seleccionarImagen : null,
-                    child: CircleAvatar(
-                      radius: 60,
-                      backgroundImage: fotoLocal != null
-                          ? FileImage(fotoLocal!)
-                          : (foto.isNotEmpty ? NetworkImage(foto) : null)
-                              as ImageProvider?,
-                      child: (foto.isEmpty && fotoLocal == null)
-                          ? Text(
-                              nombre.isNotEmpty ? nombre[0] : '?',
-                              style: const TextStyle(fontSize: 38),
-                            )
-                          : null,
-                    ),
-                  ),
-
-                  const SizedBox(height: 15),
-
-                  Text(
-                    "$nombre $apellidos",
-                    style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-                  ),
-
-                  const SizedBox(height: 10),
-
-                  Text(descripcion),
-
-                  if (esPerfilPropio) ...[
-                    const SizedBox(height: 30),
-                    ElevatedButton(
-                      onPressed: _guardar,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFFF8A80),
+              child: Form(
+                key: _form,
+                child: Column(
+                  children: [
+                    GestureDetector(
+                      onTap: esPerfilPropio ? _seleccionarImagen : null,
+                      child: CircleAvatar(
+                        radius: 60,
+                        backgroundImage: fotoLocal != null
+                            ? FileImage(fotoLocal!)
+                            : (foto.isNotEmpty ? NetworkImage(foto) : null)
+                                as ImageProvider?,
+                        child: (foto.isEmpty && fotoLocal == null)
+                            ? Text(
+                                nombre.isNotEmpty ? nombre[0] : '?',
+                                style: const TextStyle(fontSize: 38),
+                              )
+                            : null,
                       ),
-                      child: const Text("Guardar cambios"),
                     ),
-                  ]
-                ],
+
+                    const SizedBox(height: 20),
+
+                    TextFormField(
+                      initialValue: nombre,
+                      enabled: esPerfilPropio,
+                      decoration: const InputDecoration(labelText: 'Nombre'),
+                      validator: (v) =>
+                          v == null || v.isEmpty ? 'Requerido' : null,
+                      onSaved: (v) => nombre = v!,
+                    ),
+
+                    TextFormField(
+                      initialValue: apellidos,
+                      enabled: esPerfilPropio,
+                      decoration: const InputDecoration(labelText: 'Apellidos'),
+                      onSaved: (v) => apellidos = v ?? '',
+                    ),
+
+                    TextFormField(
+                      initialValue: correo,
+                      enabled: false,
+                      decoration: const InputDecoration(labelText: 'Correo'),
+                    ),
+
+                   TextFormField(
+                    initialValue: telefono,
+                    enabled: esPerfilPropio,
+                    decoration: const InputDecoration(labelText: 'Teléfono'),
+                    keyboardType: TextInputType.phone,
+
+                    validator: (v) {
+                      if (v == null || v.isEmpty) return null; // campo opcional
+                      if (!RegExp(r'^[0-9]{9}$').hasMatch(v)) {
+                        return 'Formato inválido (debe ser 9 dígitos)';
+                      }
+                      return null;
+                    },
+                    onSaved: (v) => telefono = v ?? '',
+                  ),
+
+
+                    TextFormField(
+                      initialValue: descripcion,
+                      enabled: esPerfilPropio,
+                      maxLines: 2,
+                      decoration:
+                          const InputDecoration(labelText: 'Descripción'),
+                      onSaved: (v) => descripcion = v ?? '',
+                    ),
+
+                    if (esPerfilPropio) ...[
+                      const SizedBox(height: 30),
+                      ElevatedButton(
+                        onPressed: _guardar,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFFF8A80),
+                        ),
+                        child: const Text("Guardar cambios"),
+                      ),
+
+                      const SizedBox(height: 10),
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text("Cancelar"),
+                      )
+                    ]
+                  ],
+                ),
               ),
             ),
     );

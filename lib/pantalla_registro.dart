@@ -3,7 +3,6 @@ import 'auth_dao.dart';
 import 'principal.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-
 class PantallaRegistro extends StatefulWidget {
   const PantallaRegistro({super.key});
 
@@ -13,13 +12,15 @@ class PantallaRegistro extends StatefulWidget {
 
 class _PantallaRegistroState extends State<PantallaRegistro> {
   final _formKey = GlobalKey<FormState>();
+
   String nombre = '';
   String apellidos = '';
   String email = '';
   String password = '';
-  String tipo = 'usuario';
-  bool cargando = false;
+  String confirmPass = '';
+  String tipo = 'paciente';
 
+  bool cargando = false;
   late final AuthDAO authDAO;
 
   @override
@@ -31,6 +32,7 @@ class _PantallaRegistroState extends State<PantallaRegistro> {
   Future<void> _registrar() async {
     if (!_formKey.currentState!.validate()) return;
     _formKey.currentState!.save();
+
     setState(() => cargando = true);
 
     try {
@@ -43,19 +45,21 @@ class _PantallaRegistroState extends State<PantallaRegistro> {
       );
 
       if (res.user != null) {
-        // registro directo
         if (!mounted) return;
-        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const PaginaUsuarios()));
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const PaginaUsuarios()),
+        );
       } else {
-        // puede que haya confirmación por email; igualmente informar
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Revisa tu correo para confirmar la cuenta')),
+          const SnackBar(content: Text('Revisa tu correo para activar la cuenta')),
         );
-        Navigator.pop(context);
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error registro: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error en registro: $e')),
+      );
     } finally {
       setState(() => cargando = false);
     }
@@ -64,7 +68,10 @@ class _PantallaRegistroState extends State<PantallaRegistro> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Crear cuenta')),
+      appBar: AppBar(
+        title: const Text('Crear cuenta'),
+        backgroundColor: const Color(0xFFFF8A80),
+      ),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Form(
@@ -73,29 +80,43 @@ class _PantallaRegistroState extends State<PantallaRegistro> {
             children: [
               TextFormField(
                 decoration: const InputDecoration(labelText: 'Nombre'),
-                validator: (v) => (v == null || v.isEmpty) ? 'Requerido' : null,
+                validator: (v) => v!.isEmpty ? 'Obligatorio' : null,
                 onSaved: (v) => nombre = v!.trim(),
               ),
               const SizedBox(height: 8),
+
               TextFormField(
                 decoration: const InputDecoration(labelText: 'Apellidos'),
-                onSaved: (v) => apellidos = v?.trim() ?? '',
+                validator: (v) => v!.isEmpty ? 'Obligatorio' : null,
+                onSaved: (v) => apellidos = v!.trim(),
               ),
               const SizedBox(height: 8),
+
               TextFormField(
                 decoration: const InputDecoration(labelText: 'Correo'),
                 keyboardType: TextInputType.emailAddress,
-                validator: (v) => (v == null || v.isEmpty) ? 'Requerido' : null,
+                validator: (v) => v!.isEmpty ? 'Obligatorio' : null,
                 onSaved: (v) => email = v!.trim(),
               ),
               const SizedBox(height: 8),
+
               TextFormField(
                 decoration: const InputDecoration(labelText: 'Contraseña'),
                 obscureText: true,
-                validator: (v) => (v == null || v.length < 6) ? 'Mínimo 6 caracteres' : null,
+                validator: (v) => v!.length < 6 ? 'Mínimo 6 caracteres' : null,
                 onSaved: (v) => password = v!.trim(),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
+
+              TextFormField(
+                decoration: const InputDecoration(labelText: 'Confirmar contraseña'),
+                obscureText: true,
+                validator: (v) => v!.trim() != password ? 'Las contraseñas no coinciden' : null,
+                onSaved: (v) => confirmPass = v!.trim(),
+              ),
+
+              const SizedBox(height: 16),
+
               Row(
                 children: [
                   const Text('Registrarse como:'),
@@ -103,19 +124,27 @@ class _PantallaRegistroState extends State<PantallaRegistro> {
                   DropdownButton<String>(
                     value: tipo,
                     items: const [
-                      DropdownMenuItem(value: 'usuario', child: Text('Usuario')),
+                      DropdownMenuItem(value: 'paciente', child: Text('Usuario')),
                       DropdownMenuItem(value: 'psicologo', child: Text('Psicólogo')),
                     ],
-                    onChanged: (v) {
-                      if (v != null) setState(() => tipo = v);
-                    },
+                    onChanged: (!cargando)
+                        ? (v) {
+                            if (v != null) setState(() => tipo = v);
+                          }
+                        : null,
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 18),
+
               cargando
                   ? const Center(child: CircularProgressIndicator())
-                  : ElevatedButton(onPressed: _registrar, child: const Text('Crear cuenta')),
+                  : ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFFF8A80)),
+                      onPressed: _registrar,
+                      child: const Text('Crear cuenta'),
+                    ),
             ],
           ),
         ),
