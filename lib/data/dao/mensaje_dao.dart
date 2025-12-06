@@ -4,9 +4,7 @@ class MensajeDAO {
   final SupabaseClient supabase;
   MensajeDAO(this.supabase);
 
-  /// --------------------------------------------------------
   ///  Obtener mensajes de una conversación (historial completo)
-  /// --------------------------------------------------------
   Future<List<Map<String, dynamic>>> getMensajes(String conversacionId) async {
     final resp = await supabase
         .from('mensajes')
@@ -29,9 +27,7 @@ class MensajeDAO {
     return List<Map<String, dynamic>>.from(resp);
   }
 
-  /// --------------------------------------------------------
-  ///  Enviar mensaje
-  /// --------------------------------------------------------
+  ///  enviar mensaje
   Future<Map<String, dynamic>> enviarMensaje(
       String conversacionId, String texto) async {
     final user = supabase.auth.currentUser;
@@ -51,9 +47,7 @@ class MensajeDAO {
     return Map<String, dynamic>.from(insert);
   }
 
-  /// --------------------------------------------------------
-  ///  🔴 Realtime V2 — escuchar nuevos mensajes
-  /// --------------------------------------------------------
+  ///  realtime V2 escuchar nuevos mensajes
   RealtimeChannel escucharMensajes(
     String conversacionId,
     void Function(Map<String, dynamic>) onMessage,
@@ -70,7 +64,7 @@ class MensajeDAO {
         value: conversacionId,
       ),
       callback: (payload) {
-        onMessage(payload.newRecord); // ⭐ nunca es null en insert events
+        onMessage(payload.newRecord); // nunca es null en insert events
       },
     );
 
@@ -78,9 +72,7 @@ class MensajeDAO {
     return channel;
   }
 
-  /// --------------------------------------------------------
   ///  Cancelar escucha realtime
-  /// --------------------------------------------------------
   void cancelarEscucha(RealtimeChannel channel) {
     supabase.removeChannel(channel);
   }

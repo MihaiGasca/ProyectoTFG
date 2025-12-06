@@ -11,10 +11,13 @@ dependencies:
   flutter:
     sdk: flutter
 
+  provider: ^6.0.5
+
   cupertino_icons: ^1.0.8
   supabase_flutter: ^2.10.3
+  
   table_calendar: ^3.0.9
-  image_picker: ^1.0.4   # 👈 AQUÍ
+  image_picker: ^1.0.4   
 
 dev_dependencies:
   flutter_test:

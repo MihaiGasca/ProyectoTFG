@@ -6,25 +6,35 @@ class AppFooter extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 55,  // ⭐ Tamaño fijo para evitar que crezca
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      decoration: const BoxDecoration(
-        color: Color(0xFFFF8A80),
+      height: 55,
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [
+            Color(0xFFFF8A80),
+            Color(0xFFFFB3AC),
+          ],
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black26,
-            blurRadius: 4,
-            offset: Offset(0, -2),
+            color: Colors.black.withOpacity(0.15),
+            blurRadius: 6,
+            offset: const Offset(0, -3),
           ),
         ],
+        border: const Border(
+          top: BorderSide(color: Colors.white54, width: 0.7),
+        ),
       ),
       child: const Center(
         child: Text(
           "Created by TherapyFind © 2025",
           style: TextStyle(
             color: Colors.white,
-            fontSize: 16,
+            fontSize: 15,
             fontWeight: FontWeight.w600,
+            letterSpacing: 0.8,
           ),
         ),
       ),

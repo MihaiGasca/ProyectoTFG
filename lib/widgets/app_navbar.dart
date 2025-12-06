@@ -8,33 +8,55 @@ class AppNavbar extends StatelessWidget implements PreferredSizeWidget {
   @override
   Widget build(BuildContext context) {
     return AppBar(
-      elevation: 0,
-      backgroundColor: const Color(0xFFFF8A80),
+      elevation: 4,
+      automaticallyImplyLeading: false,
+      backgroundColor: Colors.transparent,
+      flexibleSpace: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              Color(0xFFFF8A80),
+              Color(0xFFFFB3AC),
+            ],
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black26,
+              blurRadius: 6,
+              offset: Offset(0, 3),
+            ),
+          ],
+        ),
+      ),
       title: Row(
         children: [
+          // Logo
           Padding(
-            padding: const EdgeInsets.only(left: 4, right: 12, top: 4, bottom: 4),
+            padding: const EdgeInsets.only(right: 12),
             child: Image.asset(
               "assets/appTFG_Logo.png",
-              height: 70,
+              height: 42,
             ),
           ),
 
-          // Texto "TherapyFind"
+          // Texto TherapyFind
           Text(
             title,
             style: const TextStyle(
               fontSize: 22,
-              fontWeight: FontWeight.bold,
+              fontWeight: FontWeight.w800,
               color: Colors.white,
+              letterSpacing: 1,
             ),
-          )
+          ),
         ],
       ),
-      centerTitle: false, 
+      centerTitle: false,
     );
   }
 
   @override
-  Size get preferredSize => const Size.fromHeight(kToolbarHeight);
+  Size get preferredSize => const Size.fromHeight(65);
 }
