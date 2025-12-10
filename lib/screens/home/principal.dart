@@ -321,83 +321,101 @@ class _PaginaUsuariosState extends State<PaginaUsuarios> {
 
               return GestureDetector(
                 onTap: () {
-                  showModalBottomSheet(
-                    context: context,
-                    shape: const RoundedRectangleBorder(
-                      borderRadius:
-                          BorderRadius.vertical(top: Radius.circular(20)),
-                    ),
-                    builder: (_) {
-                      return Padding(
-                        padding: const EdgeInsets.all(20),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              nombre,
-                              style: const TextStyle(
-                                  fontSize: 22, fontWeight: FontWeight.bold),
+                 showModalBottomSheet(
+  context: context,
+  isScrollControlled: true,
+  shape: const RoundedRectangleBorder(
+    borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+  ),
+  builder: (_) {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                nombre,
+                style: const TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                ),
+                textAlign: TextAlign.center,
+              ),
+
+              const SizedBox(height: 18),
+
+              // ⭐ CLAVE: mantiene diseño y evita overflow
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: IntrinsicWidth(
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      TextButton.icon(
+                        onPressed: () {
+                          Navigator.pop(context);
+                          _abrirChat(p);
+                        },
+                        icon: const Icon(Icons.message),
+                        label: const Text("Mensaje"),
+                      ),
+                      TextButton.icon(
+                        onPressed: () {
+                          Navigator.pop(context);
+                          _verPerfil(p);
+                        },
+                        icon: const Icon(Icons.person_search),
+                        label: const Text("Ver perfil"),
+                      ),
+                      TextButton.icon(
+                        onPressed: () {
+                          Navigator.pop(context);
+                          _valorarPsicologo(p);
+                        },
+                        icon: const Icon(Icons.star),
+                        label: const Text("Valorar"),
+                      ),
+                      TextButton.icon(
+                        onPressed: () {
+                          Navigator.pop(context);
+                          _pedirCita(p);
+                        },
+                        icon: const Icon(Icons.calendar_month),
+                        label: const Text("Pedir cita"),
+                      ),
+                      TextButton.icon(
+                        onPressed: () {
+                          Navigator.pop(context);
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => PantallaValoracionesDePsicologo(
+                                psicologoId: p['id'],
+                                nombre: nombre,
+                              ),
                             ),
-                            const SizedBox(height: 12),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                              children: [
-                                TextButton.icon(
-                                  onPressed: () {
-                                    Navigator.pop(context);
-                                    _abrirChat(p);
-                                  },
-                                  icon: const Icon(Icons.message),
-                                  label: const Text("Mensaje"),
-                                ),
-                                TextButton.icon(
-                                  onPressed: () {
-                                    Navigator.pop(context);
-                                    _verPerfil(p);
-                                  },
-                                  icon: const Icon(Icons.person_search),
-                                  label: const Text("Ver perfil"),
-                                ),
-                                TextButton.icon(
-                                  onPressed: () {
-                                    Navigator.pop(context);
-                                    _valorarPsicologo(p);
-                                  },
-                                  icon: const Icon(Icons.star),
-                                  label: const Text("Valorar"),
-                                ),
-                                TextButton.icon(
-                                  onPressed: () {
-                                    Navigator.pop(context);
-                                    _pedirCita(p);
-                                  },
-                                  icon: const Icon(Icons.calendar_month),
-                                  label: const Text("Pedir cita"),
-                                ),
-                                TextButton.icon(
-                                  onPressed: () {
-                                    Navigator.pop(context);
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) =>
-                                            PantallaValoracionesDePsicologo(
-                                          psicologoId: p['id'],
-                                          nombre: nombre,
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                  icon: const Icon(Icons.reviews),
-                                  label: const Text("Ver valoraciones"),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      );
-                    },
-                  );
+                          );
+                        },
+                        icon: const Icon(Icons.reviews),
+                        label: const Text("Valoraciones"),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 20),
+            ],
+          ),
+        ),
+      ),
+    );
+  },
+);
+
+
                 },
                 child: Container(
                   decoration: BoxDecoration(

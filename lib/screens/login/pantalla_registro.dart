@@ -80,10 +80,10 @@ class _PantallaRegistroState extends State<PantallaRegistro> {
     return Scaffold(
       backgroundColor: const Color(0xFFFFEDEB),
 
-      ///  NAVBAR
+      /// NAVBAR
       appBar: const AppNavbar(title: "TherapyFind"),
 
-      ///  FOOTER
+      /// FOOTER
       bottomNavigationBar: const AppFooter(),
 
       body: Center(
@@ -92,7 +92,7 @@ class _PantallaRegistroState extends State<PantallaRegistro> {
             children: [
               const SizedBox(height: 40),
 
-              ///  TÍTULO
+              /// TÍTULO
               const Text(
                 "Crear cuenta",
                 style: TextStyle(
@@ -183,6 +183,7 @@ class _PantallaRegistroState extends State<PantallaRegistro> {
 
                       const SizedBox(height: 30),
 
+                      /// BOTÓN REGISTRAR
                       cargando
                           ? const CircularProgressIndicator()
                           : SizedBox(
@@ -203,6 +204,23 @@ class _PantallaRegistroState extends State<PantallaRegistro> {
                                 child: const Text("Crear cuenta"),
                               ),
                             ),
+
+                      const SizedBox(height: 20),
+
+                      
+                      TextButton(
+                        onPressed: () {
+                          Navigator.pop(context); // vuelve al login
+                        },
+                        child: const Text(
+                          "¿Ya tienes cuenta? Iniciar sesión",
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: Color(0xFFFF8A80),
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -216,7 +234,6 @@ class _PantallaRegistroState extends State<PantallaRegistro> {
     );
   }
 
-  /// 🔧 Campo estilizado reutilizable
   Widget _campo(
     String label,
     IconData icon,
