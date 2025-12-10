@@ -250,7 +250,7 @@ class _PantallaCitasUsuarioState extends State<PantallaCitasUsuario> {
 
                         const SizedBox(height: 10),
 
-                        // LISTA HORIZONTAL (sin overflow)
+                        // LISTA HORIZONTAL 
                         SizedBox(
                           height: 170,
                           child: citasHoy.isEmpty

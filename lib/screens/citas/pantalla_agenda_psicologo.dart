@@ -580,87 +580,94 @@ class _PantallaAgendaPsicologoState extends State<PantallaAgendaPsicologo> {
                   const SizedBox(height: 10),
 
                   // LISTA DE CITAS
-                  SizedBox(
-                    height: 170,
-                    child: citasHoy.isEmpty
-                        ? const Center(child: Text("No hay citas"))
-                        : ListView.builder(
-                            scrollDirection: Axis.horizontal,
-                            itemCount: citasHoy.length,
-                            itemBuilder: (_, i) {
-                              final c = citasHoy[i];
-                              final f = parseLocal(c['fecha']);
-                              final u = (c['usuario'] ?? {}) as Map<String, dynamic>;
+                 LayoutBuilder(
+  builder: (context, size) {
+    final double altura = size.maxHeight < 200 ? size.maxHeight : 200;
 
-                              return Container(
-                                width: 220,
-                                margin: const EdgeInsets.only(left: 16),
-                                padding: const EdgeInsets.all(16),
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(20),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withOpacity(0.05),
-                                      blurRadius: 10,
-                                      offset: const Offset(0, 4),
-                                    )
-                                  ],
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      "${u['nombre'] ?? ''} ${u['apellidos'] ?? ''}",
-                                      style: const TextStyle(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.bold),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      "${f.day}/${f.month}/${f.year} "
-                                      "${f.hour.toString().padLeft(2, '0')}:${f.minute.toString().padLeft(2, '0')}",
-                                    ),
-                                    const SizedBox(height: 6),
-                                    Text(
-                                      "Estado: ${c['estado']}",
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        color: c['estado'] == 'pendiente'
-                                            ? Colors.orange
-                                            : c['estado'] == 'aceptada'
-                                                ? Colors.green
-                                                : Colors.red,
-                                      ),
-                                    ),
-                                    const Spacer(),
-                                    Row(
-                                      mainAxisAlignment: MainAxisAlignment.end,
-                                      children: [
-                                        if (c['estado'] == 'pendiente')
-                                          IconButton(
-                                            icon: const Icon(Icons.check_circle,
-                                                color: Colors.green),
-                                            onPressed: () async {
-                                              await citasDAO.aceptarCita(c['id']);
-                                              await cargar();
-                                            },
-                                          ),
-                                        if (c['estado'] != 'cancelada')
-                                          IconButton(
-                                            icon: const Icon(Icons.cancel,
-                                                color: Colors.red),
-                                            onPressed: () => cancelarCita(c['id']),
-                                          ),
-                                      ],
-                                    )
-                                  ],
-                                ),
-                              );
-                            },
-                          ),
+    return ConstrainedBox(
+      constraints: BoxConstraints(
+        minHeight: 150,
+        maxHeight: altura,
+      ),
+      child: citasHoy.isEmpty
+          ? const Center(child: Text("No hay citas"))
+          : ListView.builder(
+              scrollDirection: Axis.horizontal,
+              itemCount: citasHoy.length,
+              itemBuilder: (_, i) {
+                final c = citasHoy[i];
+                final f = parseLocal(c['fecha']);
+                final u = (c['usuario'] ?? {}) as Map<String, dynamic>;
+
+                return Container(
+                  width: 220,
+                  margin: const EdgeInsets.only(left: 16),
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.05),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      )
+                    ],
                   ),
-
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        "${u['nombre'] ?? ''} ${u['apellidos'] ?? ''}",
+                        style: const TextStyle(
+                            fontSize: 16, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        "${f.day}/${f.month}/${f.year} "
+                        "${f.hour.toString().padLeft(2, '0')}:${f.minute.toString().padLeft(2, '0')}",
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        "Estado: ${c['estado']}",
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: c['estado'] == 'pendiente'
+                              ? Colors.orange
+                              : c['estado'] == 'aceptada'
+                                  ? Colors.green
+                                  : Colors.red,
+                        ),
+                      ),
+                      const SizedBox(height: 8), // Reemplazo del Spacer()
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          if (c['estado'] == 'pendiente')
+                            IconButton(
+                              icon: const Icon(Icons.check_circle,
+                                  color: Colors.green),
+                              onPressed: () async {
+                                await citasDAO.aceptarCita(c['id']);
+                                await cargar();
+                              },
+                            ),
+                          if (c['estado'] != 'cancelada')
+                            IconButton(
+                              icon:
+                                  const Icon(Icons.cancel, color: Colors.red),
+                              onPressed: () => cancelarCita(c['id']),
+                            ),
+                        ],
+                      )
+                    ],
+                  ),
+                );
+              },
+            ),
+    );
+  },
+),
                   const SizedBox(height: 20),
 
                   const Divider(),
