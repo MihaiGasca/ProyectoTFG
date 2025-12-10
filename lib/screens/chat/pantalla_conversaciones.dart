@@ -19,7 +19,10 @@ class _PantallaConversacionesState extends State<PantallaConversaciones> {
   bool _loadingChats = true;
 
   List<Map<String, dynamic>> conversaciones = [];
+  List<Map<String, dynamic>> conversacionesFiltradas = []; // 🔍 lista filtrada
   late String myId;
+
+  String query = ""; // 🔍 texto de búsqueda
 
   StreamSubscription<List<Map<String, dynamic>>>? subMensajes;
 
@@ -78,7 +81,26 @@ class _PantallaConversacionesState extends State<PantallaConversaciones> {
       return db.compareTo(da);
     });
 
+    conversacionesFiltradas = List.from(conversaciones); // 🔍 copiar lista inicial
+
     setState(() => _loadingChats = false);
+  }
+
+  // 🔍 FILTRO POR NOMBRE
+  void _buscar(String t) {
+    query = t.toLowerCase();
+
+    conversacionesFiltradas = conversaciones.where((c) {
+      final other =
+          c['usuario1_id'] == myId ? c['usuario2'] : c['usuario1'];
+
+      final fullName =
+          "${other['nombre']} ${other['apellidos']}".toLowerCase();
+
+      return fullName.contains(query);
+    }).toList();
+
+    setState(() {});
   }
 
   int _noLeidos(Map c) {
@@ -103,112 +125,136 @@ class _PantallaConversacionesState extends State<PantallaConversaciones> {
         title: const Text('Conversaciones'),
         backgroundColor: const Color(0xFFFF8A80),
       ),
-      body: conversaciones.isEmpty
-          ? const Center(child: Text("No hay conversaciones"))
-          : ListView.builder(
-              padding: const EdgeInsets.all(12),
-              itemCount: conversaciones.length,
-              itemBuilder: (_, i) {
-                final c = conversaciones[i];
 
-                final other = c['usuario1_id'] == myId
-                    ? c['usuario2']
-                    : c['usuario1'];
+      body: Column(
+        children: [
+          // 🔍 BARRA DE BÚSQUEDA
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: TextField(
+              onChanged: _buscar,
+              decoration: InputDecoration(
+                hintText: "Buscar por nombre...",
+                prefixIcon: const Icon(Icons.search),
+                filled: true,
+                fillColor: Colors.white,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ),
 
-                final unread = _noLeidos(c);
+          Expanded(
+            child: conversacionesFiltradas.isEmpty
+                ? const Center(child: Text("No hay conversaciones"))
+                : ListView.builder(
+                    padding: const EdgeInsets.all(12),
+                    itemCount: conversacionesFiltradas.length,
+                    itemBuilder: (_, i) {
+                      final c = conversacionesFiltradas[i];
 
-                final String foto = other["foto_url"] ?? "";
+                      final other = c['usuario1_id'] == myId
+                          ? c['usuario2']
+                          : c['usuario1'];
 
-                return GestureDetector(
-                  onTap: () async {
-                    await conversacionDAO.marcarLeidos(c['id']);
+                      final unread = _noLeidos(c);
 
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) =>
-                            PantallaChatIndividual(conversacion: c),
-                      ),
-                    );
+                      final String foto = other["foto_url"] ?? "";
 
-                    _loadChats();
-                  },
-                  child: Container(
-                    margin: const EdgeInsets.symmetric(vertical: 8),
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
-                        BoxShadow(
-                          blurRadius: 4,
-                          color: Colors.black.withOpacity(0.08),
-                          offset: const Offset(0, 2),
-                        )
-                      ],
-                    ),
-                    child: Row(
-                      children: [
-                        CircleAvatar(
-                          radius: 28,
-                          backgroundImage:
-                              foto.isNotEmpty ? NetworkImage(foto) : null,
-                          child: foto.isEmpty
-                              ? Text(
-                                  other['nombre'][0],
-                                  style: const TextStyle(fontSize: 22),
-                                )
-                              : null,
-                        ),
+                      return GestureDetector(
+                        onTap: () async {
+                          await conversacionDAO.marcarLeidos(c['id']);
 
-                        const SizedBox(width: 14),
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  PantallaChatIndividual(conversacion: c),
+                            ),
+                          );
 
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                          _loadChats();
+                        },
+                        child: Container(
+                          margin: const EdgeInsets.symmetric(vertical: 8),
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [
+                              BoxShadow(
+                                blurRadius: 4,
+                                color: Colors.black.withOpacity(0.08),
+                                offset: const Offset(0, 2),
+                              )
+                            ],
+                          ),
+                          child: Row(
                             children: [
-                              Text(
-                                "${other['nombre']} ${other['apellidos']}",
-                                style: const TextStyle(
-                                  fontSize: 17,
-                                  fontWeight: FontWeight.w600,
+                              CircleAvatar(
+                                radius: 28,
+                                backgroundImage:
+                                    foto.isNotEmpty ? NetworkImage(foto) : null,
+                                child: foto.isEmpty
+                                    ? Text(
+                                        other['nombre'][0],
+                                        style: const TextStyle(fontSize: 22),
+                                      )
+                                    : null,
+                              ),
+
+                              const SizedBox(width: 14),
+
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      "${other['nombre']} ${other['apellidos']}",
+                                      style: const TextStyle(
+                                        fontSize: 17,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      c['last_message'] ?? '',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        color: Colors.grey[700],
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
-                              const SizedBox(height: 4),
-                              Text(
-                                c['last_message'] ?? '',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: Colors.grey[700],
+
+                              if (unread > 0)
+                                Container(
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: const BoxDecoration(
+                                    color: Colors.red,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Text(
+                                    unread.toString(),
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 12,
+                                    ),
+                                  ),
                                 ),
-                              ),
                             ],
                           ),
                         ),
-
-                        if (unread > 0)
-                          Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: const BoxDecoration(
-                              color: Colors.red,
-                              shape: BoxShape.circle,
-                            ),
-                            child: Text(
-                              unread.toString(),
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 12,
-                              ),
-                            ),
-                          )
-                      ],
-                    ),
+                      );
+                    },
                   ),
-                );
-              },
-            ),
+          ),
+        ],
+      ),
     );
   }
 }
