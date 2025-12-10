@@ -58,6 +58,7 @@ class _PantallaChatIndividualState extends State<PantallaChatIndividual> {
     otherUser = u1['id'] == myId ? u2 : u1;
   }
 
+  // Cargar mensajes iniciales
   Future<void> _loadInitialMessages() async {
     mensajes = await dao.loadInitialMessages(convId, myId);
     if (mounted) {
