@@ -384,7 +384,7 @@ Widget build(BuildContext context) {
           ),
         ),
 
-        // 🌸 HORARIOS EN TARJETAS ESTÉTICAS
+        //HORARIOS EN TARJETAS
         Expanded(
           child: ListView(
             padding: const EdgeInsets.all(16),

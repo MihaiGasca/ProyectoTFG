@@ -117,7 +117,7 @@ class _PantallaConversacionesState extends State<PantallaConversaciones> {
 
                 final unread = _noLeidos(c);
 
-                final String foto = other["foto_url"] ?? "";   // ⭐ NUEVO SISTEMA
+                final String foto = other["foto_url"] ?? "";
 
                 return GestureDetector(
                   onTap: () async {
@@ -149,7 +149,6 @@ class _PantallaConversacionesState extends State<PantallaConversaciones> {
                     ),
                     child: Row(
                       children: [
-                        // ⭐ FOTO PRIVADA CORREGIDA
                         CircleAvatar(
                           radius: 28,
                           backgroundImage:
