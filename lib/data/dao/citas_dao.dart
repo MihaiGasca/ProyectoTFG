@@ -5,10 +5,8 @@ class CitasDAO {
 
   CitasDAO(this.supabase);
 
-  // Citas del PACIENTE sin citas pasadas
   Future<List<Map<String, dynamic>>> getCitasUsuario() async {
     final uid = supabase.auth.currentUser!.id;
-
     final ahora = DateTime.now().toUtc().toIso8601String();
 
     final res = await supabase
@@ -27,11 +25,8 @@ class CitasDAO {
     return List<Map<String, dynamic>>.from(res);
   }
 
- 
-  // Citas del PSICÓLOGO sin citas pasadas
   Future<List<Map<String, dynamic>>> getCitasPsicologo() async {
     final uid = supabase.auth.currentUser!.id;
-
     final ahora = DateTime.now().toUtc().toIso8601String();
 
     final res = await supabase
@@ -50,11 +45,17 @@ class CitasDAO {
     return List<Map<String, dynamic>>.from(res);
   }
 
-  // Cancelar cita
   Future<void> cancelarCita(String id) async {
     await supabase
         .from('citas')
         .update({'estado': 'cancelada'})
+        .eq('id', id);
+  }
+
+  Future<void> aceptarCita(String id) async {
+    await supabase
+        .from('citas')
+        .update({'estado': 'aceptada'})
         .eq('id', id);
   }
 }

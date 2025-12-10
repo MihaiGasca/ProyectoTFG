@@ -20,7 +20,7 @@ import 'package:tfg/screens/citas/pantalla_citas_usuario.dart';
 import 'package:tfg/screens/citas/pantalla_citas.dart';
 import 'package:tfg/screens/login/pantalla_login.dart';
 
-// PANTALLA DE VALORACIONES
+// Valoraciones de psicólogo
 import 'package:tfg/screens/valoraciones/pantalla_valoraciones_de_psicologo.dart';
 
 class PaginaUsuarios extends StatefulWidget {
@@ -44,8 +44,9 @@ class _PaginaUsuariosState extends State<PaginaUsuarios> {
   bool cargando = true;
 
   String query = '';
-
   late String myId;
+
+  RealtimeChannel? conversacionChannel;
 
   @override
   void initState() {
@@ -54,11 +55,46 @@ class _PaginaUsuariosState extends State<PaginaUsuarios> {
     _init();
   }
 
+  @override
+  void dispose() {
+    conversacionChannel?.unsubscribe();
+    super.dispose();
+  }
+
+  void iniciarRealtimeConversaciones() {
+    final supa = Supabase.instance.client;
+
+    conversacionChannel = supa.channel('realtime_conversaciones')
+      ..onPostgresChanges(
+        event: PostgresChangeEvent.all,
+        schema: 'public',
+        table: 'mensajes_chat',
+        callback: (_) async {
+          if (tipoUsuario == "psicologo") {
+            await _cargarConversaciones();
+          }
+        },
+      )
+      ..onPostgresChanges(
+        event: PostgresChangeEvent.all,
+        schema: 'public',
+        table: 'conversaciones',
+        callback: (_) async {
+          if (tipoUsuario == "psicologo") {
+            await _cargarConversaciones();
+          }
+        },
+      )
+      ..subscribe();
+  }
+
   Future<void> _init() async {
     await _cargarUsuario();
     await _cargarPsicologos();
+
     if (tipoUsuario == "psicologo") {
       await _cargarConversaciones();
+      iniciarRealtimeConversaciones();
     }
   }
 
@@ -70,6 +106,7 @@ class _PaginaUsuariosState extends State<PaginaUsuarios> {
   Future<void> _cargarPsicologos() async {
     final lista = await usuarioDAO.getPsicologosConRating();
     if (!mounted) return;
+
     setState(() {
       psicologos = List<Map<String, dynamic>>.from(lista);
       psicologosFiltrados = psicologos;
@@ -82,7 +119,7 @@ class _PaginaUsuariosState extends State<PaginaUsuarios> {
 
     conversaciones = lista.where((c) {
       final other =
-          (c['usuario1_id'] == myId) ? c['usuario2'] : c['usuario1'];
+          c['usuario1_id'] == myId ? c['usuario2'] : c['usuario1'];
       return other['tipo'] == 'usuario';
     }).toList();
 
@@ -110,8 +147,7 @@ class _PaginaUsuariosState extends State<PaginaUsuarios> {
       conversacionesFiltradas = conversaciones.where((c) {
         final other =
             c['usuario1_id'] == myId ? c['usuario2'] : c['usuario1'];
-        final full =
-            "${other['nombre']} ${other['apellidos']}".toLowerCase();
+        final full = "${other['nombre']} ${other['apellidos']}".toLowerCase();
         return full.contains(query);
       }).toList();
     }
@@ -126,17 +162,14 @@ class _PaginaUsuariosState extends State<PaginaUsuarios> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => PantallaChatIndividual(conversacion: conv),
-      ),
+          builder: (_) => PantallaChatIndividual(conversacion: conv)),
     );
   }
 
   void _verPerfil(Map<String, dynamic> psicologo) {
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) => PantallaPerfil(psicologo: psicologo),
-      ),
+      MaterialPageRoute(builder: (_) => PantallaPerfil(psicologo: psicologo)),
     );
   }
 
@@ -144,9 +177,8 @@ class _PaginaUsuariosState extends State<PaginaUsuarios> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => PantallaValorarPsicologo(
-          psicologoId: psicologo['id'],
-        ),
+        builder: (_) =>
+            PantallaValorarPsicologo(psicologoId: psicologo['id']),
       ),
     );
   }
@@ -185,6 +217,7 @@ class _PaginaUsuariosState extends State<PaginaUsuarios> {
   void _cerrarSesion() async {
     await Supabase.instance.client.auth.signOut();
     if (!mounted) return;
+
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(builder: (_) => const PantallaLogin()),
@@ -203,7 +236,8 @@ class _PaginaUsuariosState extends State<PaginaUsuarios> {
             _menuBoton(Icons.chat, "Chat", () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => const PantallaConversaciones()),
+                MaterialPageRoute(
+                    builder: (_) => const PantallaConversaciones()),
               );
             }, badge: unread),
           _menuBoton(Icons.calendar_month, "Citas", _irACitas),
@@ -252,184 +286,206 @@ class _PaginaUsuariosState extends State<PaginaUsuarios> {
     );
   }
 
-  // ============= LISTA PSICÓLOGOS =============
+  // LISTA PSICÓLOGOS RESPONSIVE
+  
   Widget _listaUsuarios() {
     if (psicologosFiltrados.isEmpty) {
       return const Center(child: Text("Sin resultados"));
     }
 
-    final width = MediaQuery.of(context).size.width;
-    final columnas = (width ~/ 260).clamp(1, 4);
-
     return Padding(
       padding: const EdgeInsets.all(10),
-      child: GridView.builder(
-        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: columnas,
-          crossAxisSpacing: 12,
-          mainAxisSpacing: 12,
-          childAspectRatio: 0.85,
-        ),
-        itemCount: psicologosFiltrados.length,
-        itemBuilder: (_, i) {
-          final p = psicologosFiltrados[i];
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final width = constraints.maxWidth;
+          final columnas = (width ~/ 260).clamp(1, 4);
 
-          final String nombre = "${p['nombre']} ${p['apellidos']}";
-          final String foto = p["foto_url"] ?? "";
-          final String descripcion = p["descripcion"] ?? "";
+          final cardWidth = width / columnas;
+          final cardHeight = cardWidth * 1.30;
+          final aspectRatio = cardWidth / cardHeight;
 
-          return GestureDetector(
-            onTap: () {
-              showModalBottomSheet(
-                context: context,
-                shape: const RoundedRectangleBorder(
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-                ),
-                builder: (_) {
-                  return Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(nombre,
-                            style: const TextStyle(
-                                fontSize: 22, fontWeight: FontWeight.bold)),
-                        const SizedBox(height: 12),
+          return GridView.builder(
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: columnas,
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
+              childAspectRatio: aspectRatio,
+            ),
+            itemCount: psicologosFiltrados.length,
+            itemBuilder: (_, i) {
+              final p = psicologosFiltrados[i];
 
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              final String nombre = "${p['nombre']} ${p['apellidos']}";
+              final String foto = p["foto_url"] ?? "";
+              final String descripcion = p["descripcion"] ?? "";
+
+              return GestureDetector(
+                onTap: () {
+                  showModalBottomSheet(
+                    context: context,
+                    shape: const RoundedRectangleBorder(
+                      borderRadius:
+                          BorderRadius.vertical(top: Radius.circular(20)),
+                    ),
+                    builder: (_) {
+                      return Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            TextButton.icon(
-                              onPressed: () {
-                                Navigator.pop(context);
-                                _abrirChat(p);
-                              },
-                              icon: const Icon(Icons.message),
-                              label: const Text("Mensaje"),
+                            Text(
+                              nombre,
+                              style: const TextStyle(
+                                  fontSize: 22, fontWeight: FontWeight.bold),
                             ),
-                            TextButton.icon(
-                              onPressed: () {
-                                Navigator.pop(context);
-                                _verPerfil(p);
-                              },
-                              icon: const Icon(Icons.person_search),
-                              label: const Text("Ver perfil"),
-                            ),
-                            TextButton.icon(
-                              onPressed: () {
-                                Navigator.pop(context);
-                                _valorarPsicologo(p);
-                              },
-                              icon: const Icon(Icons.star),
-                              label: const Text("Valorar"),
-                            ),
-                            TextButton.icon(
-                              onPressed: () {
-                                Navigator.pop(context);
-                                _pedirCita(p);
-                              },
-                              icon: const Icon(Icons.calendar_month),
-                              label: const Text("Pedir cita"),
-                            ),
-                            TextButton.icon(
-                              onPressed: () {
-                                Navigator.pop(context);
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => PantallaValoracionesDePsicologo(
-                                      psicologoId: p['id'],
-                                      nombre: nombre,
-                                    ),
-                                  ),
-                                );
-                              },
-                              icon: const Icon(Icons.reviews),
-                              label: const Text("Ver valoraciones"),
+                            const SizedBox(height: 12),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                              children: [
+                                TextButton.icon(
+                                  onPressed: () {
+                                    Navigator.pop(context);
+                                    _abrirChat(p);
+                                  },
+                                  icon: const Icon(Icons.message),
+                                  label: const Text("Mensaje"),
+                                ),
+                                TextButton.icon(
+                                  onPressed: () {
+                                    Navigator.pop(context);
+                                    _verPerfil(p);
+                                  },
+                                  icon: const Icon(Icons.person_search),
+                                  label: const Text("Ver perfil"),
+                                ),
+                                TextButton.icon(
+                                  onPressed: () {
+                                    Navigator.pop(context);
+                                    _valorarPsicologo(p);
+                                  },
+                                  icon: const Icon(Icons.star),
+                                  label: const Text("Valorar"),
+                                ),
+                                TextButton.icon(
+                                  onPressed: () {
+                                    Navigator.pop(context);
+                                    _pedirCita(p);
+                                  },
+                                  icon: const Icon(Icons.calendar_month),
+                                  label: const Text("Pedir cita"),
+                                ),
+                                TextButton.icon(
+                                  onPressed: () {
+                                    Navigator.pop(context);
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) =>
+                                            PantallaValoracionesDePsicologo(
+                                          psicologoId: p['id'],
+                                          nombre: nombre,
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                  icon: const Icon(Icons.reviews),
+                                  label: const Text("Ver valoraciones"),
+                                ),
+                              ],
                             ),
                           ],
                         ),
-                      ],
-                    ),
+                      );
+                    },
                   );
                 },
-              );
-            },
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    blurRadius: 8,
-                    offset: const Offset(0, 4),
-                    color: Colors.black.withOpacity(0.08),
-                  )
-                ],
-              ),
-              child: Column(
-                children: [
-                  ClipRRect(
-                    borderRadius:
-                        const BorderRadius.vertical(top: Radius.circular(16)),
-                    child: AspectRatio(
-                      aspectRatio: 1,
-                      child: foto.isNotEmpty
-                          ? Image.network(foto, fit: BoxFit.cover)
-                          : Container(
-                              color: Colors.pink.shade100,
-                              child: Center(
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        blurRadius: 8,
+                        offset: const Offset(0, 4),
+                        color: Colors.black.withOpacity(0.08),
+                      )
+                    ],
+                  ),
+                  child: Column(
+                    children: [
+                      ClipRRect(
+                        borderRadius: const BorderRadius.vertical(
+                            top: Radius.circular(16)),
+                        child: AspectRatio(
+                          aspectRatio: 1,
+                          child: foto.isNotEmpty
+                              ? Image.network(foto, fit: BoxFit.cover)
+                              : Container(
+                                  color: Colors.pink.shade100,
+                                  child: Center(
+                                    child: Text(
+                                      p['nombre'][0],
+                                      style: const TextStyle(
+                                          fontSize: 34,
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold),
+                                    ),
+                                  ),
+                                ),
+                        ),
+                      ),
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.all(10),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Column(
+                                children: [
+                                  Text(
+                                    nombre,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    "⭐ ${p['media']} (${p['total']})",
+                                    style: const TextStyle(
+                                        fontSize: 14,
+                                        color: Colors.black54),
+                                  ),
+                                ],
+                              ),
+                              Flexible(
                                 child: Text(
-                                  p['nombre'][0],
+                                  descripcion,
+                                  maxLines: 3,
+                                  overflow: TextOverflow.ellipsis,
+                                  textAlign: TextAlign.center,
                                   style: const TextStyle(
-                                      fontSize: 34,
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold),
+                                      fontSize: 12, color: Colors.grey),
                                 ),
                               ),
-                            ),
-                    ),
+                            ],
+                          ),
+                        ),
+                      )
+                    ],
                   ),
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                          vertical: 10, horizontal: 8),
-                      child: Column(
-                        children: [
-                          Text(nombre,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                  fontSize: 16, fontWeight: FontWeight.w600)),
-                          const SizedBox(height: 4),
-                          Text("⭐ ${p['media']} (${p['total']})",
-                              style: const TextStyle(
-                                  fontSize: 14, color: Colors.black54)),
-                          const SizedBox(height: 4),
-                          Expanded(
-                            child: Text(
-                              descripcion,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(
-                                  fontSize: 12, color: Colors.grey),
-                            ),
-                          )
-                        ],
-                      ),
-                    ),
-                  )
-                ],
-              ),
-            ),
+                ),
+              );
+            },
           );
         },
       ),
     );
   }
 
-  // ============= LISTA CONVERSACIONES PSICÓLOGO =============
+  // LISTA DE CONVERSACIONES 
+  
   Widget _listaConversacionesPsicologo() {
     if (conversacionesFiltradas.isEmpty) {
       return const Center(child: Text("No hay conversaciones"));
@@ -462,8 +518,16 @@ class _PaginaUsuariosState extends State<PaginaUsuarios> {
 
             _cargarConversaciones();
           },
-          title: Text("${other['nombre']} ${other['apellidos']}"),
-          subtitle: Text(c['last_message'] ?? ""),
+          title: Text(
+            "${other['nombre']} ${other['apellidos']}",
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          subtitle: Text(
+            c['last_message'] ?? "",
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
           leading: CircleAvatar(
             backgroundImage: foto.isNotEmpty ? NetworkImage(foto) : null,
             child: foto.isEmpty ? Text(other['nombre'][0]) : null,
@@ -483,6 +547,8 @@ class _PaginaUsuariosState extends State<PaginaUsuarios> {
     );
   }
 
+  // UI PRINCIPAL
+  
   @override
   Widget build(BuildContext context) {
     final unread = context.watch<UnreadProvider>().totalUnread;
@@ -495,7 +561,6 @@ class _PaginaUsuariosState extends State<PaginaUsuarios> {
           : Column(
               children: [
                 _menuSuperior(unread),
-
                 Padding(
                   padding: const EdgeInsets.all(12),
                   child: TextField(
@@ -513,8 +578,6 @@ class _PaginaUsuariosState extends State<PaginaUsuarios> {
                     ),
                   ),
                 ),
-
-                // ⭐⭐⭐ FIX DEL OVERFLOW AQUÍ ⭐⭐⭐
                 Expanded(
                   child: Padding(
                     padding: const EdgeInsets.only(bottom: 6),

@@ -13,12 +13,12 @@ class UnreadProvider extends ChangeNotifier {
     _listenRealtime();
   }
 
-  /// refrescar desde fuera
+  /// Permite refrescarlo desde fuera
   Future<void> refresh() async {
     await _loadUnread();
   }
 
-  /// carga total de mensajes no leídos
+  /// Carga todos los no leídos del usuario actual
   Future<void> _loadUnread() async {
     final resp = await supa
         .from('conversaciones')
@@ -38,26 +38,24 @@ class UnreadProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  ///  actualizaciones en tiempo real
+  /// Actualizaciones en tiempo real
   void _listenRealtime() {
-    // MENSAJES NUEVOS
-    supa.channel('public:mensajes')
-        .onPostgresChanges(
-          event: PostgresChangeEvent.insert,
-          schema: 'public',
-          table: 'mensajes',
-          callback: (_) => refresh(),
-        )
-        .subscribe();
+    supa.channel('rt_mensajes_chat')
+      ..onPostgresChanges(
+        event: PostgresChangeEvent.insert,
+        schema: 'public',
+        table: 'mensajes_chat',
+        callback: (_) => refresh(),
+      )
+      ..subscribe();
 
-    // CAMBIOS EN CONTADORES
-    supa.channel('public:conversaciones')
-        .onPostgresChanges(
-          event: PostgresChangeEvent.update,
-          schema: 'public',
-          table: 'conversaciones',
-          callback: (_) => refresh(),
-        )
-        .subscribe();
+    supa.channel('rt_conversaciones')
+      ..onPostgresChanges(
+        event: PostgresChangeEvent.update,
+        schema: 'public',
+        table: 'conversaciones',
+        callback: (_) => refresh(),
+      )
+      ..subscribe();
   }
 }

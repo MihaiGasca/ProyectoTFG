@@ -33,7 +33,7 @@ class _PantallaValoracionesDePsicologoState
     cargar();
   }
 
-  /// versión SIN RPC , solo SELECT normal
+  
   Future<void> cargar() async {
     final data = await supa
         .from('valoraciones')
@@ -121,7 +121,7 @@ class _PantallaValoracionesDePsicologoState
 
                 const SizedBox(height: 14),
 
-                /// 🔽 FILTRO
+                /// FILTRO
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 12),
                   child: DropdownButtonFormField<String>(

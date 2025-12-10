@@ -29,6 +29,7 @@ class _PantallaChatIndividualState extends State<PantallaChatIndividual> {
   List<ChatMessage> mensajes = [];
 
   StreamSubscription<List<ChatMessage>>? sub;
+  RealtimeChannel? realtimeChannel;
 
   @override
   void initState() {
@@ -40,12 +41,14 @@ class _PantallaChatIndividualState extends State<PantallaChatIndividual> {
 
     _prepareHeader();
     _loadInitialMessages();
-    _listenStream();
+    _listenStreamDAO();
+    _listenRealtime();
   }
 
   @override
   void dispose() {
     sub?.cancel();
+    realtimeChannel?.unsubscribe();
     super.dispose();
   }
 
@@ -57,18 +60,39 @@ class _PantallaChatIndividualState extends State<PantallaChatIndividual> {
 
   Future<void> _loadInitialMessages() async {
     mensajes = await dao.loadInitialMessages(convId, myId);
+
     if (mounted) {
       setState(() {});
       _scrollToBottom();
     }
   }
 
-  void _listenStream() {
+  // STREAM DEL DAO
+  void _listenStreamDAO() {
     sub = dao.listenMessages(convId, myId).listen((nuevos) {
       if (!mounted) return;
+
       setState(() => mensajes = nuevos);
       _scrollToBottom();
     });
+  }
+
+  // SUPABASE REALTIME
+  void _listenRealtime() {
+    realtimeChannel = supa.channel("chat_$convId")
+      ..onPostgresChanges(
+        event: PostgresChangeEvent.all,
+        schema: 'public',
+        table: 'mensajes_chat',
+        callback: (payload) async {
+          final data = payload.newRecord ?? payload.oldRecord;
+
+          if (data != null && data["conversacion_id"] == convId) {
+            await _loadInitialMessages();
+          }
+        },
+      )
+      ..subscribe();
   }
 
   Future<void> _send() async {
@@ -83,10 +107,12 @@ class _PantallaChatIndividualState extends State<PantallaChatIndividual> {
     _scrollToBottom();
   }
 
+  // Scroll con último mensaje abajo
   void _scrollToBottom() {
     Future.delayed(const Duration(milliseconds: 200), () {
-      if (!_scroll.hasClients) return;
-      _scroll.jumpTo(_scroll.position.maxScrollExtent);
+      if (_scroll.hasClients) {
+        _scroll.jumpTo(_scroll.position.maxScrollExtent);
+      }
     });
   }
 
@@ -102,8 +128,10 @@ class _PantallaChatIndividualState extends State<PantallaChatIndividual> {
 
   bool _esNuevoDia(int index) {
     if (index == 0) return true;
+
     final prev = DateTime.parse(mensajes[index - 1].createdAt).toLocal();
     final curr = DateTime.parse(mensajes[index].createdAt).toLocal();
+
     return prev.day != curr.day ||
         prev.month != curr.month ||
         prev.year != curr.year;
@@ -123,7 +151,8 @@ class _PantallaChatIndividualState extends State<PantallaChatIndividual> {
               radius: 22,
               backgroundImage: foto.isNotEmpty ? NetworkImage(foto) : null,
               child: foto.isEmpty
-                  ? Text(otherUser['nombre'][0], style: const TextStyle(fontSize: 20))
+                  ? Text(otherUser['nombre'][0],
+                      style: const TextStyle(fontSize: 20))
                   : null,
             ),
             const SizedBox(width: 12),
@@ -137,86 +166,86 @@ class _PantallaChatIndividualState extends State<PantallaChatIndividual> {
       body: Column(
         children: [
           Expanded(
-            child: ListView.builder(
-              controller: _scroll,
-              padding: const EdgeInsets.all(12),
-              itemCount: mensajes.length,
-              itemBuilder: (_, i) {
-                final m = mensajes[i];
-                final nuevoDia = _esNuevoDia(i);
+  child: ListView.builder(
+    controller: _scroll,
+    reverse: true,  
+    padding: const EdgeInsets.all(12),
+    itemCount: mensajes.length,
+    itemBuilder: (_, i) {
 
-                return Column(
-                  children: [
-                    if (nuevoDia)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 10),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 14),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.8),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Text(
-                            _dia(m.createdAt),
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: Colors.black54,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ),
+      final m = mensajes[i];
+      final nuevoDia = _esNuevoDia(i);
 
-                    Align(
-                      alignment: m.isMine
-                          ? Alignment.centerRight
-                          : Alignment.centerLeft,
-                      child: Container(
-                        constraints: const BoxConstraints(maxWidth: 260),
-                        margin: const EdgeInsets.symmetric(vertical: 6),
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: m.isMine
-                              ? const Color(0xFFFF8A80)
-                              : Colors.white,
-                          borderRadius: BorderRadius.circular(16),
-                          boxShadow: [
-                            BoxShadow(
-                              blurRadius: 4,
-                              color: Colors.black.withOpacity(0.08),
-                              offset: const Offset(0, 2),
-                            )
-                          ],
-                        ),
-                        child: Column(
-                          crossAxisAlignment: m.isMine
-                              ? CrossAxisAlignment.end
-                              : CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              m.content,
-                              style: TextStyle(
-                                fontSize: 15,
-                                color: m.isMine ? Colors.white : Colors.black87,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              _hora(m.createdAt),
-                              style: TextStyle(
-                                color: m.isMine ? Colors.white70 : Colors.grey[600],
-                                fontSize: 11,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
+      return Column(
+        children: [
+
+          if (nuevoDia)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 14),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.7),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  _dia(m.createdAt),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Colors.black54,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+
+          Align(
+            alignment: m.isMine ? Alignment.centerRight : Alignment.centerLeft,
+            child: Container(
+              constraints: const BoxConstraints(maxWidth: 260),
+              margin: const EdgeInsets.symmetric(vertical: 6),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: m.isMine ? const Color(0xFFFF8A80) : Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    blurRadius: 4,
+                    color: Colors.black.withOpacity(0.08),
+                    offset: const Offset(0, 2),
+                  )
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment:
+                    m.isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    m.content,
+                    style: TextStyle(
+                      fontSize: 15,
+                      color: m.isMine ? Colors.white : Colors.black87,
                     ),
-                  ],
-                );
-              },
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    _hora(m.createdAt),
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: m.isMine ? Colors.white70 : Colors.grey[600],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
+
+        ],
+      );
+    },
+  ),
+),
+
 
           _BarraMensaje(controller: _controller, send: _send),
         ],
@@ -240,7 +269,8 @@ class _BarraMensaje extends StatelessWidget {
         children: [
           Expanded(
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(22),

@@ -82,7 +82,7 @@ class _PantallaValorarPsicologoState extends State<PantallaValorarPsicologo> {
       body: Center(
         child: SingleChildScrollView(
           child: Container(
-            width: 450, // 🔥 Tarjeta compacta, no muy grande
+            width: 450, 
             padding: const EdgeInsets.all(22),
             margin: const EdgeInsets.all(16),
             decoration: BoxDecoration(

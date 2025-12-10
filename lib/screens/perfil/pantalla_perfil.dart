@@ -34,8 +34,8 @@ class _PantallaPerfilState extends State<PantallaPerfil> {
   late String telefono;
   late String descripcion;
 
-  late String fotoPath; // SOLO PATH en BD
-  String? fotoUrl; // URL firmada para mostrar
+  late String fotoPath;
+  String? fotoUrl;
 
   @override
   void initState() {
@@ -51,9 +51,6 @@ class _PantallaPerfilState extends State<PantallaPerfil> {
       telefono = u['telefono'] ?? '';
       descripcion = u['descripcion'] ?? '';
 
-      // Lo que viene desde principal es:
-      // foto_perfil = path
-      // foto_url = signed URL generada en el DAO
       fotoPath = u['foto_perfil'] ?? '';
       fotoUrl = u['foto_url'];
 
@@ -73,7 +70,7 @@ class _PantallaPerfilState extends State<PantallaPerfil> {
     descripcion = datos?['descripcion'] ?? '';
 
     fotoPath = datos?['foto_perfil'] ?? '';
-    fotoUrl = datos?['foto_url']; // URL firmada generada por el DAO
+    fotoUrl = datos?['foto_url'];
 
     setState(() => cargando = false);
   }
@@ -100,8 +97,10 @@ class _PantallaPerfilState extends State<PantallaPerfil> {
     }
   }
 
-  /// SUBIR IMAGEN — SOLO GUARDAMOS PATH EN BD, URL firmada solo para mostrar
+  /// SUBIR IMAGEN devuelve nuevo path o null si no se cambia imagen
   Future<String?> _subirImagen() async {
+    if (fotoLocal == null && _webImageBytes == null) return null;
+
     final supa = Supabase.instance.client;
     final uid = supa.auth.currentUser!.id;
     final path = "perfiles/$uid/perfil.jpg";
@@ -112,7 +111,6 @@ class _PantallaPerfilState extends State<PantallaPerfil> {
         await supa.storage.from('perfiles').remove([path]);
       } catch (_) {}
 
-      // Subir nueva
       if (kIsWeb) {
         await supa.storage.from('perfiles').uploadBinary(
           path,
@@ -127,15 +125,13 @@ class _PantallaPerfilState extends State<PantallaPerfil> {
         );
       }
 
-      // Crear URL firmada nueva
       final signed = await supa.storage
           .from('perfiles')
           .createSignedUrl(path, 3600);
 
       fotoUrl = "$signed&cache=${DateTime.now().millisecondsSinceEpoch}";
 
-      return path; // Lo que se guarda en BDD
-
+      return path;
     } catch (e) {
       debugPrint("Error al subir imagen: $e");
       return null;
@@ -150,7 +146,6 @@ class _PantallaPerfilState extends State<PantallaPerfil> {
 
     try {
       final nuevoPath = await _subirImagen();
-      if (nuevoPath != null) fotoPath = nuevoPath;
 
       await usuarioDAO.actualizarPerfil(
         nombre: nombre,
@@ -158,7 +153,7 @@ class _PantallaPerfilState extends State<PantallaPerfil> {
         correo: correo,
         telefono: telefono,
         descripcion: descripcion,
-        foto: fotoPath, // BD → SOLO PATH
+        foto: nuevoPath, // null → NO SE ACTUALIZA FOTO
       );
 
       if (!mounted) return;
@@ -169,7 +164,6 @@ class _PantallaPerfilState extends State<PantallaPerfil> {
 
     } catch (e) {
       if (!mounted) return;
-
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Error: $e")),
       );
@@ -220,9 +214,8 @@ class _PantallaPerfilState extends State<PantallaPerfil> {
                             : fotoLocal != null
                                 ? FileImage(fotoLocal!)
                                 : (fotoUrl != null && fotoUrl!.isNotEmpty
-                                        ? NetworkImage(fotoUrl!)
-                                        : null)
-                                    as ImageProvider?,
+                                    ? NetworkImage(fotoUrl!)
+                                    : null) as ImageProvider?,
                         child: (fotoUrl == null &&
                                 fotoLocal == null &&
                                 _webImageBytes == null)
@@ -290,7 +283,6 @@ class _PantallaPerfilState extends State<PantallaPerfil> {
 
                     const SizedBox(height: 30),
 
-                    // PERFIL PROPIO → Guardar + Cancelar
                     if (esPerfilPropio) ...[
                       ElevatedButton(
                         onPressed: _guardar,
@@ -325,7 +317,6 @@ class _PantallaPerfilState extends State<PantallaPerfil> {
                       ),
                     ],
 
-                    // PERFIL AJENO → Valorar
                     if (!esPerfilPropio)
                       ElevatedButton(
                         onPressed: () {

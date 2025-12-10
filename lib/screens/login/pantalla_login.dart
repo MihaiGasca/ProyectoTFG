@@ -84,7 +84,7 @@ class _PantallaLoginState extends State<PantallaLogin> {
             children: [
               const SizedBox(height: 30),
 
-              /// 🔥 TÍTULO
+              /// TÍTULO
               const Text(
                 "Bienvenido",
                 style: TextStyle(
@@ -201,7 +201,7 @@ class _PantallaLoginState extends State<PantallaLogin> {
     );
   }
 
-  /// Estilo global de inputs
+  /// Estilo  inputs
   Widget _input({
     required String label,
     required IconData icon,

@@ -75,7 +75,7 @@ class ValoracionesDAO {
     return getValoracionesDePsicologo(userId);
   }
 
-  ///  Obtener valoraciones realizadas por el usuario logueado
+  ///  obtener valoraciones realizadas por el usuario logueado
   Future<Map<String, dynamic>> getMisValoraciones() async {
     final userId = client.auth.currentUser!.id;
 

@@ -172,7 +172,7 @@ class DisponibilidadDAO {
     final list = List<Map<String, dynamic>>.from(res);
     final now = DateTime.now();
 
-    // Filtramos en cliente para evitar líos de zona horaria
+    // filtramos en cliente para evitar problemas de zona horaria
     return list.where((c) {
       final f = DateTime.parse(c['fecha']).toLocal();
       return f.isAfter(now);

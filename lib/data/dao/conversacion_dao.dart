@@ -11,7 +11,7 @@ class ConversacionDAO {
     try {
       final res = await supabase.storage.from('perfiles').createSignedUrl(
             path,
-            60 * 60, // 1 hora
+            60 * 60, // 1 hora 3600 segundos
           );
       return res;
     } catch (_) {
@@ -20,7 +20,7 @@ class ConversacionDAO {
   }
 
    
-  /// Obtener conversaciones del usuario con foto_url añadida
+  /// Obtener conversaciones del usuario con foto url añadida
    
   Future<List<Map<String, dynamic>>> getConversacionesUsuario() async {
     final me = supabase.auth.currentUser;
@@ -49,7 +49,7 @@ class ConversacionDAO {
         .map((c) => Map<String, dynamic>.from(c))
         .toList();
 
-    // Agregar foto_url firmada a usuario1 y usuario2
+    // Agregar foto url firmada a usuario1 y usuario2
     for (var c in lista) {
       final u1 = c["usuario1"];
       final u2 = c["usuario2"];
@@ -65,7 +65,7 @@ class ConversacionDAO {
   }
 
   
-  ///Obtener conversación o crearla (con foto_url añadida)
+  ///Obtener conversación o crearla
  
   Future<Map<String, dynamic>> getOrCreateConversation(String otherUserId) async {
     final me = supabase.auth.currentUser;
@@ -90,7 +90,7 @@ class ConversacionDAO {
 
       final c = Map<String, dynamic>.from(data);
 
-      //  Añadir URL firmada
+      //  añadir URL firmada
       c["usuario1"]["foto_url"] =
           await _signedUrl(c["usuario1"]["foto_perfil"]);
       c["usuario2"]["foto_url"] =

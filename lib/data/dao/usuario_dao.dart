@@ -11,7 +11,7 @@ class UsuarioDAO {
     try {
       final signed = await client.storage
           .from('perfiles')
-          .createSignedUrl(path, 3600); // 1h
+          .createSignedUrl(path, 3600); // 1 hora
 
       return "$signed&cache=${DateTime.now().millisecondsSinceEpoch}";
     } catch (_) {
@@ -29,10 +29,8 @@ class UsuarioDAO {
         .eq('id', id)
         .maybeSingle();
 
-    // Generar URL firmada
     if (data != null && data['foto_perfil'] != null) {
-      final signed = await generarUrlFirmada(data['foto_perfil']);
-      data['foto_url'] = signed;
+      data['foto_url'] = await generarUrlFirmada(data['foto_perfil']);
     }
 
     return data;
@@ -50,23 +48,30 @@ class UsuarioDAO {
     return List<Map<String, dynamic>>.from(lista);
   }
 
+  /// solo actualiza foto_perfil si se envía una nueva
   Future<void> actualizarPerfil({
     required String nombre,
     required String apellidos,
     required String correo,
     required String telefono,
     required String descripcion,
-    required String foto, // solo path
+    String? foto, // puede llegar null → no se actualiza
   }) async {
     final id = client.auth.currentUser!.id;
 
-    await client.from('usuarios').update({
+    final Map<String, dynamic> updateData = {
       'nombre': nombre,
       'apellidos': apellidos,
       'correo': correo,
       'telefono': telefono,
       'descripcion': descripcion,
-      'foto_perfil': foto, // solo path
-    }).eq('id', id);
+    };
+
+    // Solo actualizamos foto perfil si hay nueva
+    if (foto != null && foto.isNotEmpty) {
+      updateData['foto_perfil'] = foto;
+    }
+
+    await client.from('usuarios').update(updateData).eq('id', id);
   }
 }

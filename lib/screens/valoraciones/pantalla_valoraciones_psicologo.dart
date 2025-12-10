@@ -110,7 +110,7 @@ class _PantallaValoracionesPsicologoState
 
                 const SizedBox(height: 14),
 
-                /// 🔽 FILTRO MODERNO
+                /// FILTRO 
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12),
                   child: DropdownButtonFormField<String>(

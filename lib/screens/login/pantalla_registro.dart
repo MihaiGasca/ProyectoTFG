@@ -80,7 +80,7 @@ class _PantallaRegistroState extends State<PantallaRegistro> {
     return Scaffold(
       backgroundColor: const Color(0xFFFFEDEB),
 
-      ///  NAVBAR (ya incluye botón volver)
+      ///  NAVBAR
       appBar: const AppNavbar(title: "TherapyFind"),
 
       ///  FOOTER

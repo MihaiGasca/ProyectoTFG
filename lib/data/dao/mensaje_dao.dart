@@ -4,7 +4,7 @@ class MensajeDAO {
   final SupabaseClient supabase;
   MensajeDAO(this.supabase);
 
-  ///  Obtener mensajes de una conversación (historial completo)
+  ///  obtener historial de mensajes de una conversación
   Future<List<Map<String, dynamic>>> getMensajes(String conversacionId) async {
     final resp = await supabase
         .from('mensajes')
@@ -47,7 +47,7 @@ class MensajeDAO {
     return Map<String, dynamic>.from(insert);
   }
 
-  ///  realtime V2 escuchar nuevos mensajes
+  ///  realtime escuchar nuevos mensajes
   RealtimeChannel escucharMensajes(
     String conversacionId,
     void Function(Map<String, dynamic>) onMessage,
